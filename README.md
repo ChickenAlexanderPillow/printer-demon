@@ -1,0 +1,36 @@
+# Printer Demon
+
+Borderless WPF drag-and-drop printer tile for the Xerox VersaLink C600 queue
+`Xerox VersaLink C600 (8a:c6:4a)`.
+
+## Requirements
+
+- Windows x64
+- The exact queue name above
+- A working driver installed for that queue
+- The Xerox VersaLink C600 V4 PS driver configured on the exact queue
+
+The app refuses to print when the target queue is missing or offline. It uses
+the print settings saved on that exact Windows printer queue and never falls
+back to another printer.
+
+## Run
+
+Run `PrinterDemon.exe` from this folder. No .NET installation is required.
+
+## Publish
+
+The release includes Ghostscript under `tools/ghostscript/installed`.
+
+Drop PDFs or JPG, JPEG, PNG, TIFF, or BMP files onto the tile. Jobs are sent
+automatically using A4 media from Tray 1, while inheriting the printer's saved
+settings for the remaining print options, with 400 DPI shrink-to-fit rendering
+and high output quality.
+The app does not add a print delay; it submits jobs immediately.
+Additional files can be dropped while printing; they are appended to the
+single ordered session queue and submitted as soon as the current spool
+handoff completes. Multi-file drops are rendered concurrently and submitted
+as one ordered bundle, while later drops remain separate ordered jobs.
+For large drops, the app uses ordered bundles of up to eight files with at
+most four files rendering concurrently, preventing memory spikes while
+keeping printer jobs grouped.

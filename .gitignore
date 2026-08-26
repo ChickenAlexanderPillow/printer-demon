@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+release/
+publish/
+artifacts/
+
+# Visual Studio / .NET user files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet and test output
+*.nupkg
+packages/
+TestResults/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local secrets and environment overrides
+*.local
+*.env
+!.env.example
+
