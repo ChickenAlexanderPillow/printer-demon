@@ -1,6 +1,7 @@
 using ImageMagick;
 using System.IO;
 using System.Diagnostics;
+using System.IO.Compression;
 
 namespace PrinterDemon;
 
@@ -9,6 +10,8 @@ public sealed record RenderedPage(string ImagePath, double WidthInches, double H
 public sealed class DocumentRenderer
 {
     private const int RenderDpi = 400;
+    private const string GhostscriptBundleResource = "PrinterDemon.GhostscriptBundle.zip";
+    private static readonly object GhostscriptExtractionGate = new();
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase)
         { ".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp" };
 
@@ -49,7 +52,8 @@ public sealed class DocumentRenderer
     {
         var ghostscript = ResolveGhostscript();
         if (ghostscript is null)
-            throw new InvalidOperationException("Ghostscript is required to render PDF files.");
+            throw new InvalidOperationException(
+                "Ghostscript is required to render PDF files. Reinstall using the complete PrinterDemon-win-x64 package, including the tools folder.");
 
         var pattern = Path.Combine(outputDirectory, "page-%04d.png");
         var startInfo = new ProcessStartInfo(ghostscript)
@@ -90,6 +94,34 @@ public sealed class DocumentRenderer
         candidates.AddRange((Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
             .Select(path => Path.Combine(path.Trim(), "gswin64c.exe")));
-        return candidates.FirstOrDefault(File.Exists);
+        var existing = candidates.FirstOrDefault(File.Exists);
+        if (existing is not null) return existing;
+
+        // The release also embeds Ghostscript so the EXE remains usable when
+        // somebody copies it without the adjacent tools folder.
+        try
+        {
+            var extractedRoot = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "PrinterDemon", "Ghostscript");
+            var extractedExecutable = Path.Combine(extractedRoot, "bin", "gswin64c.exe");
+            lock (GhostscriptExtractionGate)
+            {
+                if (!File.Exists(extractedExecutable))
+                {
+                    using var bundle = typeof(DocumentRenderer).Assembly
+                        .GetManifestResourceStream(GhostscriptBundleResource);
+                    if (bundle is null) return null;
+                    Directory.CreateDirectory(extractedRoot);
+                    using var archive = new ZipArchive(bundle, ZipArchiveMode.Read);
+                    archive.ExtractToDirectory(extractedRoot, overwriteFiles: true);
+                }
+            }
+            return File.Exists(extractedExecutable) ? extractedExecutable : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

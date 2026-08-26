@@ -300,6 +300,7 @@ public partial class MainWindow : Window
 
     private void SetIdleState()
     {
+        DemonVisual.ShowIdle();
         DropSurface.BorderBrush = ReadyBrush;
         TitleText.Text = "Drop Files";
         StatusText.Text = "Drop PDFs or images to print.";
@@ -308,6 +309,7 @@ public partial class MainWindow : Window
 
     private void SetBusyState(IReadOnlyList<string> files)
     {
+        DemonVisual.ShowPrinting();
         DropSurface.BorderBrush = BusyBrush;
         TitleText.Text = "Printing";
         StatusText.Text = files.Count == 1 ? "Rendering and sending to Xerox." : $"Printing {files.Count} files.";
@@ -316,6 +318,7 @@ public partial class MainWindow : Window
 
     private void SetPartialState(int success, int failed)
     {
+        DemonVisual.ShowError();
         DropSurface.BorderBrush = BusyBrush;
         TitleText.Text = "Partial";
         StatusText.Text = $"Sent {success}; {failed} failed.";
@@ -324,6 +327,7 @@ public partial class MainWindow : Window
 
     private void SetSentState(int total)
     {
+        DemonVisual.ShowDone();
         DropSurface.BorderBrush = BusyBrush;
         TitleText.Text = "Sent";
         StatusText.Text = $"Sent {total} file{(total == 1 ? string.Empty : "s")} to Xerox.";
@@ -332,6 +336,7 @@ public partial class MainWindow : Window
 
     private void SetErrorState(string message)
     {
+        DemonVisual.ShowError();
         DropSurface.BorderBrush = ErrorBrush;
         TitleText.Text = "Can't Print";
         StatusText.Text = message;

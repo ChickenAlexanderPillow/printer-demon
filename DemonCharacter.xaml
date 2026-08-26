@@ -1,0 +1,19 @@
+<UserControl x:Class="PrinterDemon.DemonCharacter"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="72" Height="72">
+    <Grid x:Name="CharacterImageHost"
+          Width="72" Height="72"
+          HorizontalAlignment="Center" VerticalAlignment="Center"
+          RenderTransformOrigin="0.5,0.75">
+        <Image x:Name="IdleDemonImage"
+               Source="print demon smile.png"
+               Stretch="Uniform"
+               Width="72" Height="72" />
+        <Image x:Name="DancingDemonImage"
+               Source="print demon.png"
+               Stretch="Uniform"
+               Width="72" Height="72"
+               Visibility="Collapsed" />
+    </Grid>
+</UserControl>

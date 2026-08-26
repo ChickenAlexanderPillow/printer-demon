@@ -4,6 +4,8 @@ obj/
 release/
 publish/
 artifacts/
+test/
+tools/ghostscript/installed/
 
 # Visual Studio / .NET user files
 .vs/
@@ -26,4 +28,3 @@ Thumbs.db
 *.local
 *.env
 !.env.example
-

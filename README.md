@@ -20,7 +20,12 @@ Run `PrinterDemon.exe` from this folder. No .NET installation is required.
 
 ## Publish
 
-The release includes Ghostscript under `tools/ghostscript/installed`.
+The release includes Ghostscript under `tools/ghostscript/installed`, and the
+runtime is also embedded in the EXE as a fallback. Ghostscript is the PDF
+rendering engine used to convert dropped PDF pages into images before they are
+sent to the printer. It is only needed for PDFs; JPG, PNG, TIFF, and BMP files
+do not use it. The complete folder or ZIP is still recommended, but PDF support
+can recover the embedded runtime if someone copies only the EXE.
 
 Drop PDFs or JPG, JPEG, PNG, TIFF, or BMP files onto the tile. Jobs are sent
 automatically using A4 media from Tray 1, while inheriting the printer's saved

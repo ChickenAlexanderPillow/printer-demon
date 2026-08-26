@@ -6,6 +6,7 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>assets\PrinterDemon.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
@@ -17,7 +18,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="assets\GhostscriptBundle.zip" LogicalName="PrinterDemon.GhostscriptBundle.zip" />
+    <Resource Include="print demon.png" />
+    <Resource Include="print demon smile.png" />
     <None Update="README.md" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="assets\PrinterDemon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup Condition="Exists('tools\ghostscript\installed')">
