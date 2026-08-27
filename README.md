@@ -6,7 +6,7 @@ Borderless WPF drag-and-drop printer tile for the Xerox VersaLink C600 queue
 ## Requirements
 
 - Windows x64
-- The exact queue name above
+- An online Xerox VersaLink C600 queue
 - A working driver installed for that queue
 - The Xerox VersaLink C600 V4 PS driver configured on the exact queue
 

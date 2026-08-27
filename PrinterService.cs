@@ -23,11 +23,34 @@ public sealed class PrinterService
 
     public PrinterService(PrintSettings? settings = null) => _settings = settings ?? PrintSettings.Default;
 
+    private static PrintQueue ResolveQueue(LocalPrintServer server, string requestedName)
+    {
+        var queues = server.GetPrintQueues().ToArray();
+        var exact = queues.FirstOrDefault(queue =>
+            string.Equals(queue.FullName, requestedName, StringComparison.OrdinalIgnoreCase)
+            && queue.QueueDriver.Name.Contains("Xerox", StringComparison.OrdinalIgnoreCase)
+            && !queue.IsOffline);
+        if (exact is not null) return exact;
+
+        var matches = queues
+            .Where(queue => queue.FullName.Contains("VersaLink C600", StringComparison.OrdinalIgnoreCase))
+            .Where(queue => !queue.IsOffline)
+            // Do not use Microsoft's generic IPP class driver. It produces
+            // lower-quality output and does not expose the Xerox media model.
+            .Where(queue => queue.QueueDriver.Name.Contains("Xerox", StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(queue => queue.QueueDriver.Name.Contains("Xerox VersaLink C600 V4 PS", StringComparison.OrdinalIgnoreCase))
+            // Windows often leaves duplicate '(Copy N)' queues behind after
+            // an IPP/WSD driver reinstall. Prefer the original queue next.
+            .ThenBy(queue => queue.FullName.Contains("(Copy", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            .ToArray();
+        return matches.FirstOrDefault()
+            ?? throw new InvalidOperationException("No online Xerox VersaLink C600 queue using a Xerox driver was found. Install the Xerox C600 driver and recreate the queue.");
+    }
+
     public void Validate()
     {
         using var server = new LocalPrintServer();
-        var queue = server.GetPrintQueue(_settings.PrinterName);
-        if (queue is null) throw new InvalidOperationException($"Printer not found: {_settings.PrinterName}");
+        var queue = ResolveQueue(server, _settings.PrinterName);
         if (queue.IsOffline) throw new InvalidOperationException("The Xerox printer is offline.");
         if (!queue.FullName.Contains("Xerox VersaLink C600", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The selected queue is not the Xerox VersaLink C600.");
@@ -38,11 +61,43 @@ public sealed class PrinterService
     {
         if (pages.Count == 0) throw new InvalidOperationException("The document has no printable pages.");
         using var server = new LocalPrintServer();
-        var queue = server.GetPrintQueue(_settings.PrinterName);
-        var ticket = BuildTicket(queue);
+        var queue = ResolveQueue(server, _settings.PrinterName);
+
+        // Xerox installations vary: some accept XPS, while others accept
+        // GDI/EMF. Try the path appropriate to the installed driver first,
+        // then retry once through the other spool format after an immediate
+        // rejection.
+        var prefersXps = queue.QueueDriver.Name.Contains("Xerox VersaLink C600 V4 PS", StringComparison.OrdinalIgnoreCase);
+        var first = TrySubmit(() => prefersXps
+            ? PrintXpsPages(queue, pages, jobName)
+            : PrintRasterPages(pages, jobName));
+        if (first.Completed) return first;
+
+        var second = TrySubmit(() => prefersXps
+            ? PrintRasterPages(pages, jobName)
+            : PrintXpsPages(queue, pages, jobName));
+        if (second.Completed) return second;
+
+        return new PrintSubmissionResult(false,
+            $"The Xerox queue rejected both print formats. First attempt: {first.Message} Second attempt: {second.Message}");
+    }
+
+    private static PrintSubmissionResult TrySubmit(Func<PrintSubmissionResult> submit)
+    {
+        try { return submit(); }
+        catch (Exception ex) { return new PrintSubmissionResult(false, ex.Message); }
+    }
+
+    private static PrintSubmissionResult PrintXpsPages(
+        PrintQueue queue, IReadOnlyList<RenderedPage> pages, string jobName)
+    {
         var document = BuildDocument(pages);
         var writer = PrintQueue.CreateXpsDocumentWriter(queue);
         var submittedAt = DateTime.UtcNow;
+        var ticket = queue.DefaultPrintTicket.Clone();
+        // Preserve the complete queue default ticket. On IPP queues,
+        // changing PageMediaSize here can make the driver reselect a tray,
+        // even when the saved default is Tray 1.
         writer.Write(document, ticket);
         return ConfirmSubmission(queue, jobName, submittedAt);
     }
@@ -50,12 +105,12 @@ public sealed class PrinterService
     private PrintSubmissionResult PrintRasterPages(IReadOnlyList<RenderedPage> pages, string jobName)
     {
         using var server = new LocalPrintServer();
-        var queue = server.GetPrintQueue(_settings.PrinterName);
+        var queue = ResolveQueue(server, _settings.PrinterName);
         var submittedAt = DateTime.UtcNow;
         using var document = new PrintDocument
         {
             DocumentName = jobName,
-            PrinterSettings = { PrinterName = _settings.PrinterName, Copies = (short)_settings.Copies },
+            PrinterSettings = { PrinterName = queue.FullName, Copies = (short)_settings.Copies },
             DefaultPageSettings = { Color = _settings.Color, Landscape = false, Margins = new Margins(0, 0, 0, 0) }
         };
         document.PrinterSettings.Duplex = Duplex.Simplex;
@@ -135,7 +190,8 @@ public sealed class PrinterService
 
             job.Refresh();
             if (job.IsInError || job.IsBlocked || job.IsDeleted)
-                return new PrintSubmissionResult(false, "The printer reported a job error.");
+                return new PrintSubmissionResult(false,
+                    $"The printer reported a job error ({job.JobStatus}).");
             return new PrintSubmissionResult(true, "Sent to printer.");
         }
 

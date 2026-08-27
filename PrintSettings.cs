@@ -11,7 +11,7 @@ public sealed record PrintSettings(
     bool EconomyModeOff)
 {
     public static PrintSettings Default => new(
-        "Xerox VersaLink C600 (8a:c6:4a)", true, true, "Tray1", 1, true, true, true);
+        "Xerox VersaLink C600", true, true, "Tray1", 1, true, true, true);
 }
 
 public sealed record PrintJobResult(string SourcePath, int PageCount, bool Success, bool Submitted, string Message)

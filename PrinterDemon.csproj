@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="test\**" />
     <EmbeddedResource Include="assets\GhostscriptBundle.zip" LogicalName="PrinterDemon.GhostscriptBundle.zip" />
     <Resource Include="print demon.png" />
     <Resource Include="print demon smile.png" />
