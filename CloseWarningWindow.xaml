@@ -1,0 +1,62 @@
+<Window x:Class="PrinterDemon.CloseWarningWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="390"
+        Height="218"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        AllowsTransparency="True"
+        Background="Transparent"
+        FontFamily="Bahnschrift">
+    <Border Margin="8"
+            Padding="22,18,22,16"
+            CornerRadius="18"
+            Background="{StaticResource TileSurfaceBrush}"
+            BorderBrush="{StaticResource PanelBorderBrush}"
+            BorderThickness="1">
+        <Border.Effect>
+            <DropShadowEffect Color="#55000000" BlurRadius="18" ShadowDepth="4" Opacity="0.35" />
+        </Border.Effect>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Orientation="Horizontal">
+                <Border Width="27" Height="27" CornerRadius="14"
+                        Background="#FFF0D5" VerticalAlignment="Center">
+                    <TextBlock Text="!" FontSize="18" FontWeight="Bold"
+                               Foreground="{StaticResource AccentBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="PRINTING ISN'T FINISHED"
+                           Margin="10,0,0,0" FontSize="14" FontWeight="SemiBold"
+                           Foreground="{StaticResource StatusBrush}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock x:Name="WarningText" Grid.Row="1"
+                       Text="There are print jobs still queued or in progress. Close Printer Demon anyway?"
+                       Margin="0,14,0,16" FontSize="13" Foreground="{StaticResource HintBrush}"
+                       TextWrapping="Wrap" />
+
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="KEEP OPEN" Click="KeepOpen_Click"
+                        MinWidth="92" Height="31" Margin="0,0,8,0"
+                        Padding="12,2" FontSize="9" FontWeight="SemiBold"
+                        Foreground="{StaticResource AccentBrush}"
+                        Background="Transparent" BorderBrush="{StaticResource PanelBorderBrush}"
+                        BorderThickness="1" Cursor="Hand" />
+                <Button Content="CLOSE ANYWAY" Click="CloseAnyway_Click"
+                        MinWidth="108" Height="31" Padding="12,2"
+                        FontSize="9" FontWeight="SemiBold"
+                        Foreground="White" Background="{StaticResource AccentBrush}"
+                        BorderThickness="0" Cursor="Hand" />
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

@@ -136,18 +136,20 @@ public sealed class PrinterService
         {
             var page = pages[pageIndex++];
             using var image = System.Drawing.Image.FromFile(page.ImagePath);
+            var graphics = args.Graphics
+                ?? throw new InvalidOperationException("The printer did not provide a graphics surface.");
             var bounds = GetPrintableBounds(args);
             var scale = Math.Min((double)bounds.Width / image.Width, (double)bounds.Height / image.Height);
             var width = Math.Max(1, (int)Math.Round(image.Width * scale));
             var height = Math.Max(1, (int)Math.Round(image.Height * scale));
             var x = bounds.Left + (bounds.Width - width) / 2;
             var y = bounds.Top + (bounds.Height - height) / 2;
-            args.Graphics.CompositingMode = CompositingMode.SourceCopy;
-            args.Graphics.CompositingQuality = CompositingQuality.HighQuality;
-            args.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            args.Graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            args.Graphics.SmoothingMode = SmoothingMode.HighQuality;
-            args.Graphics.DrawImage(image, new Rectangle(x, y, width, height), 0, 0, image.Width, image.Height, GraphicsUnit.Pixel);
+            graphics.CompositingMode = CompositingMode.SourceCopy;
+            graphics.CompositingQuality = CompositingQuality.HighQuality;
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            graphics.SmoothingMode = SmoothingMode.HighQuality;
+            graphics.DrawImage(image, new Rectangle(x, y, width, height), 0, 0, image.Width, image.Height, GraphicsUnit.Pixel);
             args.HasMorePages = pageIndex < pages.Count;
         };
         document.Print();
@@ -209,8 +211,10 @@ public sealed class PrinterService
 
     private static Rectangle GetPrintableBounds(PrintPageEventArgs args)
     {
-        var dpiX = args.Graphics.DpiX;
-        var dpiY = args.Graphics.DpiY;
+        var graphics = args.Graphics
+            ?? throw new InvalidOperationException("The printer did not provide a graphics surface.");
+        var dpiX = graphics.DpiX;
+        var dpiY = graphics.DpiY;
         var left = Math.Max(0, (int)Math.Round(args.PageSettings.HardMarginX * dpiX / 100.0));
         var top = Math.Max(0, (int)Math.Round(args.PageSettings.HardMarginY * dpiY / 100.0));
         var right = Math.Max(left + 1, args.PageBounds.Width - left);

@@ -21,7 +21,22 @@ Run `PrinterDemon.exe` from this folder. No .NET installation is required.
 To run the project from source with the .NET SDK:
 
 ```powershell
-dotnet run --project .\PrinterDemon.csproj
+dotnet run --project .\PrinterDemon.csproj -- --skip-update-check
+```
+
+## Development
+
+Restore dependencies and build the project with:
+
+```powershell
+dotnet restore .\PrinterDemon.csproj
+dotnet build .\PrinterDemon.csproj
+```
+
+Run the development build without checking for updates:
+
+```powershell
+dotnet run --project .\PrinterDemon.csproj -- --skip-update-check
 ```
 
 ## Install

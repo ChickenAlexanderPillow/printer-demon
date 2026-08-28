@@ -16,15 +16,20 @@
         Background="Transparent"
         FontFamily="Bahnschrift"
         AllowsTransparency="True"
-        KeyDown="Window_KeyDown">
-    <Grid x:Name="RootSurface"
-          Background="{StaticResource WindowBackgroundBrush}"
-          AllowDrop="True"
-          PreviewDragEnter="Window_DragEnter"
-          PreviewDragOver="Window_DragOver"
-          PreviewDragLeave="Window_DragLeave"
-          PreviewDrop="Window_Drop"
-          MouseLeftButtonDown="Window_MouseLeftButtonDown">
+        Icon="/PrinterDemon;component/assets/PrinterDemon.ico"
+        KeyDown="Window_KeyDown"
+        Closing="Window_Closing">
+    <Border x:Name="WindowFrame"
+            CornerRadius="24"
+            Background="{StaticResource WindowBackgroundBrush}">
+        <Grid x:Name="RootSurface"
+              Background="Transparent"
+              AllowDrop="True"
+              PreviewDragEnter="Window_DragEnter"
+              PreviewDragOver="Window_DragOver"
+              PreviewDragLeave="Window_DragLeave"
+              PreviewDrop="Window_Drop"
+              MouseLeftButtonDown="Window_MouseLeftButtonDown">
         <Border x:Name="DropSurface"
                 Margin="12"
                 Padding="26"
@@ -127,7 +132,42 @@
                            Opacity="0.55"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,2" />
-            </Grid>
+                </Grid>
         </Border>
-    </Grid>
+        <Border x:Name="HotEdgeGlow"
+                Margin="4"
+                CornerRadius="21"
+                BorderThickness="3"
+                BorderBrush="#FFFF2100"
+                Background="Transparent"
+                Opacity="0"
+                IsHitTestVisible="False"
+                Panel.ZIndex="5">
+            <Border.Effect>
+                <DropShadowEffect Color="#FFFF2100"
+                                  BlurRadius="18"
+                                  ShadowDepth="0"
+                                  Opacity="0.95" />
+            </Border.Effect>
+        </Border>
+        <Button x:Name="CloseButton"
+                Content="×"
+                Click="CloseButton_Click"
+                MouseLeftButtonDown="CloseButton_MouseLeftButtonDown"
+                ToolTip="Close"
+                Width="30"
+                Height="30"
+                Margin="0,18,18,0"
+                Padding="0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Panel.ZIndex="10"
+                Background="Transparent"
+                BorderThickness="0"
+                Foreground="{StaticResource HintBrush}"
+                FontFamily="Segoe UI Symbol"
+                FontSize="22"
+                Cursor="Hand" />
+        </Grid>
+    </Border>
 </Window>

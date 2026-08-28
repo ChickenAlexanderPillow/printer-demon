@@ -2,8 +2,10 @@ using System.IO;
 using System.Net.Http;
 using System.Collections.Concurrent;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Collections.ObjectModel;
 
 namespace PrinterDemon;
@@ -28,6 +30,7 @@ public partial class MainWindow : Window
     private bool _isPrinting;
     private bool _workerRunning;
     private bool _updateCheckStarted;
+    private bool _closeWithoutWarning;
 
     public ObservableCollection<QueueItem> SessionQueue { get; } = new();
 
@@ -103,6 +106,26 @@ public partial class MainWindow : Window
     private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+    }
+
+    private void CloseButton_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => e.Handled = true;
+
+    private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Window_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_closeWithoutWarning)
+            return;
+
+        var remaining = SessionQueue.Count(item => item.Status is "Queued" or "Printing");
+        if (remaining == 0)
+            return;
+
+        var dialog = new CloseWarningWindow(remaining) { Owner = this };
+        if (dialog.ShowDialog() != true)
+            e.Cancel = true;
+        else
+            _closeWithoutWarning = true;
     }
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
@@ -349,6 +372,7 @@ public partial class MainWindow : Window
 
     private void SetIdleState()
     {
+        FadeEdgeGlow(false);
         DemonVisual.ShowIdle();
         DropSurface.BorderBrush = ReadyBrush;
         TitleText.Text = "Drop Files";
@@ -358,6 +382,7 @@ public partial class MainWindow : Window
 
     private void SetBusyState(IReadOnlyList<string> files)
     {
+        FadeEdgeGlow(true);
         DemonVisual.ShowPrinting();
         DropSurface.BorderBrush = BusyBrush;
         TitleText.Text = "Printing";
@@ -367,6 +392,7 @@ public partial class MainWindow : Window
 
     private void SetPartialState(int success, int failed)
     {
+        FadeEdgeGlow(false);
         DemonVisual.ShowError();
         DropSurface.BorderBrush = BusyBrush;
         TitleText.Text = "Partial";
@@ -376,6 +402,7 @@ public partial class MainWindow : Window
 
     private void SetSentState(int total)
     {
+        FadeEdgeGlow(false);
         DemonVisual.ShowDone();
         DropSurface.BorderBrush = BusyBrush;
         TitleText.Text = "Sent";
@@ -385,11 +412,22 @@ public partial class MainWindow : Window
 
     private void SetErrorState(string message)
     {
+        FadeEdgeGlow(false);
         DemonVisual.ShowError();
         DropSurface.BorderBrush = ErrorBrush;
         TitleText.Text = "Can't Print";
         StatusText.Text = message;
         DetailText.Text = "Check the saved Xerox printer settings.";
+    }
+
+    private void FadeEdgeGlow(bool show)
+    {
+        HotEdgeGlow.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation
+        {
+            To = show ? 1 : 0,
+            Duration = TimeSpan.FromMilliseconds(450),
+            EasingFunction = new QuadraticEase()
+        });
     }
 
     private static SolidColorBrush Brush(string value)
