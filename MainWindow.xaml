@@ -110,6 +110,13 @@
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
+                    <TextBlock x:Name="VersionText"
+                               Text="v—"
+                               FontSize="8"
+                               Foreground="{StaticResource HintBrush}"
+                               Opacity="0.55"
+                               HorizontalAlignment="Center"
+                               Margin="0,3,0,0" />
                 </StackPanel>
             </Grid>
         </Border>

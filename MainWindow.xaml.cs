@@ -47,6 +47,9 @@ public partial class MainWindow : Window
         try
         {
             var update = await _updateService.CheckAsync();
+            if (_updateService.LatestVersion is not null)
+                VersionText.Text = $"v{_updateService.LatestVersion}";
+
             if (update is null) return;
 
             var details = string.IsNullOrWhiteSpace(update.Notes)

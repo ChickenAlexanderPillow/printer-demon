@@ -11,6 +11,7 @@ internal sealed class UpdateService
     private const string ManifestUrl =
         "https://github.com/ChickenAlexanderPillow/printer-demon/releases/latest/download/latest.json";
     private static readonly HttpClient Client = CreateClient();
+    public Version? LatestVersion { get; private set; }
 
     public async Task<PrinterUpdate?> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -18,6 +19,7 @@ internal sealed class UpdateService
         if (manifest is null || !Version.TryParse(manifest.Version, out var availableVersion))
             return null;
 
+        LatestVersion = availableVersion;
         var currentVersion = Assembly.GetEntryAssembly()?.GetName().Version ?? new Version(0, 0, 0);
         return availableVersion > currentVersion
             ? new PrinterUpdate(availableVersion, manifest.Url, manifest.Notes)
