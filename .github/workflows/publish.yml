@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -24,12 +26,21 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $project = [xml](Get-Content PrinterDemon.csproj)
-          $version = ($project.Project.PropertyGroup.Version | Select-Object -First 1).Trim()
-          if (-not [System.Version]::TryParse($version, [ref]$parsedVersion)) {
-            throw "PrinterDemon.csproj contains an invalid version: $version"
+          $latestTag = git tag --list 'v*' --sort=-v:refname |
+            Where-Object { $_ -match '^v\d+\.\d+\.\d+\.\d+$' } |
+            Select-Object -First 1
+
+          if ($latestTag) {
+            $latestVersion = [System.Version]::Parse($latestTag.Substring(1))
+            $version = '{0}.{1}.{2}.{3}' -f $latestVersion.Major, $latestVersion.Minor,
+              $latestVersion.Build, ($latestVersion.Revision + 1)
+          } else {
+            $version = '0.1.0.1'
           }
-          "version=$version" >> $env:GITHUB_OUTPUT
+
+          Write-Host "Latest release tag: $latestTag"
+          Write-Host "Next release version: $version"
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Publish
         run: dotnet publish PrinterDemon.csproj --configuration Release --runtime win-x64 --self-contained true --output publish -p:Version=${{ steps.version.outputs.version }} -p:AssemblyVersion=${{ steps.version.outputs.version }} -p:FileVersion=${{ steps.version.outputs.version }} -p:PublishSingleFile=true
