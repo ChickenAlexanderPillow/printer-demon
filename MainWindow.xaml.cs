@@ -15,10 +15,10 @@ public partial class MainWindow : Window
     // small number of ordered bundles.
     private const int MaxFilesPerBundle = 8;
     private const int MaxConcurrentRenders = 4;
-    private static readonly Brush ReadyBrush = Brush("#214456");
-    private static readonly Brush ActiveBrush = Brush("#42B7D6");
-    private static readonly Brush BusyBrush = Brush("#F09A4A");
-    private static readonly Brush ErrorBrush = Brush("#FF5964");
+    private static readonly Brush ReadyBrush = Brush("#C86D3C");
+    private static readonly Brush ActiveBrush = Brush("#C6532D");
+    private static readonly Brush BusyBrush = Brush("#D89535");
+    private static readonly Brush ErrorBrush = Brush("#B83A3A");
     private readonly DocumentRenderer _renderer = new();
     private readonly PrinterService _printer = new();
     private readonly UpdateService _updateService = new();
@@ -46,7 +46,7 @@ public partial class MainWindow : Window
 
         try
         {
-            var update = await _updateService.CheckAsync();
+            var update = await _updateService.CheckAsync(!HasSkipUpdateCheckArgument());
             if (_updateService.LatestVersion is not null)
                 VersionText.Text = $"v{_updateService.LatestVersion}";
 
@@ -71,6 +71,17 @@ public partial class MainWindow : Window
         {
             // Updates are optional; offline or unavailable GitHub releases must not block printing.
         }
+    }
+
+    private static bool HasSkipUpdateCheckArgument()
+    {
+        foreach (var argument in Environment.GetCommandLineArgs())
+        {
+            if (string.Equals(argument, "--skip-update-check", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     private void QueuePopOut_Click(object sender, RoutedEventArgs e)
@@ -302,8 +313,8 @@ public partial class MainWindow : Window
         var complete = SessionQueue.Count(item => item.Status == "Sent");
         var failed = SessionQueue.Count(item => item.Status == "Failed");
         QueueSummaryText.Text = failed == 0
-            ? $"SESSION QUEUE - {remaining} remaining - {complete} complete"
-            : $"SESSION QUEUE - {remaining} remaining - {complete} complete - {failed} failed";
+            ? $"QUEUE · {remaining} REMAINING · {complete} COMPLETE"
+            : $"QUEUE · {remaining} REMAINING · {complete} COMPLETE · {failed} FAILED";
     }
 
     private static string BatchJobName(PrintBatch batch, int chunkIndex, int chunkCount)

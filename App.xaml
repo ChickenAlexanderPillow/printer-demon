@@ -5,18 +5,20 @@
     <Application.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
         <LinearGradientBrush x:Key="WindowBackgroundBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#141416" Offset="0" />
-            <GradientStop Color="#0E0E10" Offset="0.55" />
-            <GradientStop Color="#101820" Offset="1" />
+            <GradientStop Color="#F4EBDD" Offset="0" />
+            <GradientStop Color="#EFE0CC" Offset="0.55" />
+            <GradientStop Color="#E7D1B6" Offset="1" />
         </LinearGradientBrush>
         <LinearGradientBrush x:Key="TileSurfaceBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#191A1E" Offset="0" />
-            <GradientStop Color="#111215" Offset="0.6" />
-            <GradientStop Color="#101A20" Offset="1" />
+            <GradientStop Color="#FFFDF8" Offset="0" />
+            <GradientStop Color="#FFF8EE" Offset="0.6" />
+            <GradientStop Color="#F9EBDD" Offset="1" />
         </LinearGradientBrush>
-        <SolidColorBrush x:Key="TileBorderBrush" Color="#214456" />
-        <SolidColorBrush x:Key="StatusBrush" Color="#F5F5F7" />
-        <SolidColorBrush x:Key="HintBrush" Color="#A3A6AF" />
-        <SolidColorBrush x:Key="AccentBrush" Color="#42B7D6" />
+        <SolidColorBrush x:Key="TileBorderBrush" Color="#C86D3C" />
+        <SolidColorBrush x:Key="StatusBrush" Color="#252B35" />
+        <SolidColorBrush x:Key="HintBrush" Color="#68717C" />
+        <SolidColorBrush x:Key="AccentBrush" Color="#C6532D" />
+        <SolidColorBrush x:Key="PanelBrush" Color="#F7E9D8" />
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#E1C4A6" />
     </Application.Resources>
 </Application>

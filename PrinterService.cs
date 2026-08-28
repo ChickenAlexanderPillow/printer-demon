@@ -88,16 +88,16 @@ public sealed class PrinterService
         catch (Exception ex) { return new PrintSubmissionResult(false, ex.Message); }
     }
 
-    private static PrintSubmissionResult PrintXpsPages(
+    private PrintSubmissionResult PrintXpsPages(
         PrintQueue queue, IReadOnlyList<RenderedPage> pages, string jobName)
     {
         var document = BuildDocument(pages);
         var writer = PrintQueue.CreateXpsDocumentWriter(queue);
         var submittedAt = DateTime.UtcNow;
-        var ticket = queue.DefaultPrintTicket.Clone();
-        // Preserve the complete queue default ticket. On IPP queues,
-        // changing PageMediaSize here can make the driver reselect a tray,
-        // even when the saved default is Tray 1.
+        // Supply one explicit, validated input-bin selection for both the
+        // job and its pages. Sending the untouched queue ticket can let the
+        // Xerox driver add a second media-source request for the bypass tray.
+        var ticket = BuildTicket(queue);
         writer.Write(document, ticket);
         return ConfirmSubmission(queue, jobName, submittedAt);
     }

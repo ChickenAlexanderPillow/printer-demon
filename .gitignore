@@ -19,6 +19,12 @@ tools/ghostscript/installed/
 packages/
 TestResults/
 
+# Local end-to-end run snapshots and logs
+e2e-*/
+e2e-installer.log
+test-update/
+test-release.exe
+
 # OS/editor files
 .DS_Store
 Thumbs.db

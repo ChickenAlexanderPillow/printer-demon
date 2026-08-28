@@ -1,4 +1,4 @@
-# Printer Demon
+![alt text](image.png)# Printer Demon
 
 Borderless WPF drag-and-drop printer tile for the Xerox VersaLink C600 queue
 `Xerox VersaLink C600 (8a:c6:4a)`.
@@ -17,6 +17,21 @@ back to another printer.
 ## Run
 
 Run `PrinterDemon.exe` from this folder. No .NET installation is required.
+
+To run the project from source with the .NET SDK:
+
+```powershell
+dotnet run --project .\PrinterDemon.csproj
+```
+
+## Install
+
+Download and run `PrinterDemon-Setup.exe` from the latest GitHub release. The
+installer adds Printer Demon to the Start Menu, optionally creates a desktop
+shortcut, and registers an uninstaller in Windows Apps & features.
+
+To remove all old installations and leftovers, run
+`tools\Uninstall-All-PrinterDemon.ps1` in PowerShell and confirm with `YES`.
 
 ## Publish
 

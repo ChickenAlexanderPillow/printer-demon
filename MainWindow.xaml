@@ -3,12 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:PrinterDemon"
         Title="Printer Demon"
-        Width="360"
-        Height="360"
-        MinWidth="360"
-        MinHeight="360"
-        MaxWidth="360"
-        MaxHeight="360"
+        Width="380"
+        Height="400"
+        MinWidth="380"
+        MinHeight="400"
+        MaxWidth="380"
+        MaxHeight="400"
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="True"
@@ -18,7 +18,7 @@
         AllowsTransparency="True"
         KeyDown="Window_KeyDown">
     <Grid x:Name="RootSurface"
-          Background="Transparent"
+          Background="{StaticResource WindowBackgroundBrush}"
           AllowDrop="True"
           PreviewDragEnter="Window_DragEnter"
           PreviewDragOver="Window_DragOver"
@@ -27,54 +27,60 @@
           MouseLeftButtonDown="Window_MouseLeftButtonDown">
         <Border x:Name="DropSurface"
                 Margin="12"
-                Padding="28"
-                CornerRadius="28"
-                BorderThickness="1.5"
-                BorderBrush="{StaticResource TileBorderBrush}"
+                Padding="26"
+                CornerRadius="18"
+                BorderThickness="0"
                 Background="{StaticResource TileSurfaceBrush}">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="26" ShadowDepth="0" Color="#087D9D" Opacity="0.22" />
-            </Border.Effect>
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="100" />
+                    <RowDefinition Height="100" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="18" />
                 </Grid.RowDefinitions>
-                <StackPanel Grid.Row="1" VerticalAlignment="Center">
-                    <local:DemonCharacter x:Name="DemonVisual" HorizontalAlignment="Center" Margin="0,0,0,2" />
+                <Grid Grid.Row="0" Margin="0,0,0,12">
+                    <TextBlock Text="PRINTER DEMON" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{StaticResource AccentBrush}"
+                               VerticalAlignment="Top" Margin="0,10,0,0" />
+                    <local:DemonCharacter x:Name="DemonVisual" HorizontalAlignment="Center"
+                                          VerticalAlignment="Top" Margin="0,0,0,0" />
+                </Grid>
+                <StackPanel Grid.Row="1" VerticalAlignment="Top" Margin="0,8,0,18">
                     <TextBlock x:Name="TitleText" Text="Drop Files" FontSize="34" FontWeight="SemiBold"
                                Foreground="{StaticResource StatusBrush}" TextAlignment="Center" />
-                    <Border Width="96" Height="2" Margin="0,12,0,16" CornerRadius="1"
-                            Background="{StaticResource AccentBrush}" HorizontalAlignment="Center" />
                     <TextBlock x:Name="StatusText"
                                Text="Drop PDFs or images to print."
                                FontSize="14" Foreground="{StaticResource HintBrush}"
-                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="252"
-                               HorizontalAlignment="Center" />
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="284"
+                               HorizontalAlignment="Center" Margin="0,12,0,0" />
                 </StackPanel>
-                <StackPanel Grid.Row="2" HorizontalAlignment="Center">
-                    <TextBlock x:Name="DetailText" FontSize="12" Foreground="{StaticResource HintBrush}"
+                <Border Grid.Row="2" Background="{StaticResource PanelBrush}"
+                        CornerRadius="11" Padding="12,10" Margin="0,0,0,14">
+                    <StackPanel>
+                    <TextBlock x:Name="DetailText" FontSize="11" Foreground="{StaticResource HintBrush}"
                                TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="250" />
-                    <Grid Margin="0,10,0,4">
+                    <Grid Margin="0,8,0,5">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="QueueSummaryText" Text="SESSION QUEUE - 0 remaining - 0 complete"
-                                   FontSize="10" Foreground="{StaticResource AccentBrush}" Opacity="0.8"
+                        <TextBlock x:Name="QueueSummaryText" Text="QUEUE · 0 REMAINING · 0 COMPLETE"
+                                   FontSize="9" TextTrimming="CharacterEllipsis"
+                                   Foreground="{StaticResource AccentBrush}" Opacity="0.8"
                                    VerticalAlignment="Center" />
-                        <Button Grid.Column="1" Content="POP OUT" Click="QueuePopOut_Click"
-                                Padding="5,2" FontSize="9" Foreground="{StaticResource AccentBrush}"
+                        <Button Grid.Column="1" Content="OPEN QUEUE" Click="QueuePopOut_Click"
+                                Width="78" Padding="2" FontSize="8" Foreground="{StaticResource AccentBrush}"
                                 Background="Transparent" BorderThickness="0" Cursor="Hand" />
                     </Grid>
                     <ListBox x:Name="QueueList"
-                             Width="250"
-                             Height="64"
+                             HorizontalAlignment="Stretch"
+                             MinHeight="0"
+                             MaxHeight="96"
                              ItemsSource="{Binding SessionQueue}"
                              Background="Transparent"
                              BorderThickness="0"
                              Foreground="{StaticResource HintBrush}"
+                             ScrollViewer.CanContentScroll="True"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              Padding="0">
@@ -92,7 +98,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="42" />
-                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="68" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding FileName}" FontSize="10"
                                                TextTrimming="CharacterEllipsis" />
@@ -105,19 +111,22 @@
                                                VerticalAlignment="Center"
                                                Visibility="{Binding IsSent, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     <TextBlock Grid.Column="2" Text="{Binding Status}" Margin="4,0,0,0"
-                                               FontSize="10" Foreground="{StaticResource StatusBrush}" />
+                                               FontSize="10" Foreground="{StaticResource StatusBrush}"
+                                               TextAlignment="Right" TextTrimming="CharacterEllipsis" />
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                    <TextBlock x:Name="VersionText"
-                               Text="v—"
-                               FontSize="8"
-                               Foreground="{StaticResource HintBrush}"
-                               Opacity="0.55"
-                               HorizontalAlignment="Center"
-                               Margin="0,3,0,0" />
-                </StackPanel>
+                    </StackPanel>
+                </Border>
+                <TextBlock Grid.Row="3"
+                           x:Name="VersionText"
+                           Text="v—"
+                           FontSize="8"
+                           Foreground="{StaticResource HintBrush}"
+                           Opacity="0.55"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,2" />
             </Grid>
         </Border>
     </Grid>

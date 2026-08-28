@@ -7,7 +7,7 @@
         MinWidth="460"
         MinHeight="320"
         WindowStartupLocation="CenterOwner"
-        Background="#111215"
+        Background="{StaticResource WindowBackgroundBrush}"
         FontFamily="Bahnschrift">
     <Grid Margin="18">
         <Grid.RowDefinitions>
@@ -16,7 +16,7 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TextBlock Text="PRINTER DEMON" FontSize="12"
+        <TextBlock Text="PRINTER DEMON · PRINT STATION" FontSize="12"
                    Foreground="{StaticResource AccentBrush}" />
         <TextBlock Grid.Row="1" Text="SESSION QUEUE" Margin="0,4,0,12"
                    FontSize="20" FontWeight="SemiBold"
@@ -24,11 +24,12 @@
 
         <ListBox Grid.Row="2"
                  ItemsSource="{Binding SessionQueue}"
-                 Background="#191A1E"
-                 BorderBrush="#34424A"
-                 BorderThickness="1"
+                 Background="{StaticResource TileSurfaceBrush}"
+                 BorderBrush="{StaticResource PanelBorderBrush}"
+                 BorderThickness="2"
                  Padding="10"
                  Foreground="{StaticResource HintBrush}"
+                 ScrollViewer.CanContentScroll="True"
                  ScrollViewer.VerticalScrollBarVisibility="Auto"
                  ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemContainerStyle>
@@ -45,7 +46,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="90" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="78" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Text="{Binding FileName}" FontSize="12"
@@ -63,7 +64,8 @@
                                    Visibility="{Binding IsSent, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <TextBlock Grid.Column="2" Text="{Binding Status}" Margin="8,0,0,0"
                                    FontSize="11" Foreground="{StaticResource StatusBrush}"
-                                   VerticalAlignment="Center" />
+                                   VerticalAlignment="Center" TextAlignment="Right"
+                                   TextTrimming="CharacterEllipsis" />
                     </Grid>
                 </DataTemplate>
             </ListBox.ItemTemplate>

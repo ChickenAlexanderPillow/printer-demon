@@ -25,8 +25,10 @@ jobs:
         shell: pwsh
         run: |
           $project = [xml](Get-Content PrinterDemon.csproj)
-          $base = ($project.Project.PropertyGroup.Version | Select-Object -First 1).Trim()
-          $version = "$base.${{ github.run_number }}"
+          $version = ($project.Project.PropertyGroup.Version | Select-Object -First 1).Trim()
+          if (-not [System.Version]::TryParse($version, [ref]$parsedVersion)) {
+            throw "PrinterDemon.csproj contains an invalid version: $version"
+          }
           "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Publish
@@ -41,6 +43,15 @@ jobs:
           $url = "https://github.com/${{ github.repository }}/releases/download/v$version/PrinterDemon.exe"
           @{ version = $version; url = $url; sha256 = $hash; notes = "" } | ConvertTo-Json | Set-Content publish/latest.json
 
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress --yes
+          }
+          & $iscc "/DMyAppVersion=${{ steps.version.outputs.version }}" installer\PrinterDemon.iss
+
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -50,3 +61,4 @@ jobs:
           files: |
             publish/PrinterDemon.exe
             publish/latest.json
+            artifacts/PrinterDemon-Setup-*.exe
