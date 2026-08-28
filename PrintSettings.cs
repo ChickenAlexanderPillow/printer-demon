@@ -19,4 +19,13 @@ public sealed record PrintJobResult(string SourcePath, int PageCount, bool Succe
     public static PrintJobResult Failure(string path, string message) => new(path, 0, false, false, message);
 }
 
-public sealed record PrintSubmissionResult(bool Completed, string Message);
+public sealed record PrintSubmissionResult(bool Completed, string Message, PrintJobReference? Job = null);
+
+public sealed record PrintJobReference(string QueueName, int JobIdentifier);
+
+public sealed record PrintJobMonitoringResult(bool Printed, bool Failed, string Message)
+{
+    public static PrintJobMonitoringResult PrintedSuccessfully(string message) => new(true, false, message);
+    public static PrintJobMonitoringResult FailedWith(string message) => new(false, true, message);
+    public static PrintJobMonitoringResult SentWithoutConfirmation(string message) => new(false, false, message);
+}

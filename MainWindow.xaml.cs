@@ -47,6 +47,13 @@ public partial class MainWindow : Window
         if (_updateCheckStarted) return;
         _updateCheckStarted = true;
 
+        var commandLineFiles = Environment.GetCommandLineArgs()
+            .Skip(1)
+            .Where(DocumentRenderer.IsSupported)
+            .ToArray();
+        if (commandLineFiles.Length > 0)
+            QueueFiles(commandLineFiles);
+
         try
         {
             var update = await _updateService.CheckAsync(!HasSkipUpdateCheckArgument());
@@ -149,6 +156,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        QueueFiles(files);
+        e.Handled = true;
+    }
+
+    private void QueueFiles(IReadOnlyList<string> files)
+    {
         var queueItems = files.Select(path => new QueueItem(path)).ToArray();
         foreach (var item in queueItems)
         {
@@ -171,7 +184,6 @@ public partial class MainWindow : Window
             }
         }
         if (startWorker) StartQueueWorker();
-        e.Handled = true;
     }
 
     private void UpdateDragState(DragEventArgs e)
@@ -279,7 +291,17 @@ public partial class MainWindow : Window
                         // chunks remain ordered on the printer queue.
                         var submission = _printer.Print(allPages, BatchJobName(batch, chunkIndex, chunkCount));
                         foreach (var item in chunk)
-                            UpdateQueueItem(item, "Sent", submission.Message);
+                            UpdateQueueItem(item, "Printing", submission.Message);
+
+                        if (submission.Job is null)
+                        {
+                            foreach (var item in chunk)
+                                UpdateQueueItem(item, "Sent", submission.Message);
+                        }
+                        else
+                        {
+                            StartSpoolerMonitor(chunk, submission.Job);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -330,10 +352,35 @@ public partial class MainWindow : Window
         });
     }
 
+    private void StartSpoolerMonitor(IReadOnlyList<QueueItem> items, PrintJobReference job)
+    {
+        _ = StaTaskRunner.RunAsync(() => _printer.WaitForCompletion(job)).ContinueWith(task =>
+        {
+            var result = task.IsCompletedSuccessfully
+                ? task.Result
+                : PrintJobMonitoringResult.SentWithoutConfirmation(
+                    "Accepted by Windows spooler; final status unavailable.");
+            Dispatcher.BeginInvoke(() =>
+            {
+                var finalStatus = result.Failed
+                    ? "Failed"
+                    : result.Printed ? "Printed" : "Sent";
+                foreach (var item in items)
+                {
+                    item.Status = finalStatus;
+                    item.Detail = result.Message;
+                    item.IsActive = false;
+                }
+                UpdateQueueSummary();
+                SetOverallState();
+            });
+        }, TaskScheduler.Default);
+    }
+
     private void UpdateQueueSummary()
     {
         var remaining = SessionQueue.Count(item => item.Status is "Queued" or "Printing");
-        var complete = SessionQueue.Count(item => item.Status == "Sent");
+        var complete = SessionQueue.Count(item => item.Status is "Sent" or "Printed");
         var failed = SessionQueue.Count(item => item.Status == "Failed");
         QueueSummaryText.Text = failed == 0
             ? $"QUEUE · {remaining} REMAINING · {complete} COMPLETE"
@@ -349,14 +396,31 @@ public partial class MainWindow : Window
 
     private void SetOverallState()
     {
+        var active = SessionQueue.Count(item => item.Status is "Queued" or "Printing");
+        _isPrinting = active > 0;
+        if (active > 0)
+        {
+            FadeEdgeGlow(true);
+            DemonVisual.ShowPrinting();
+            DropSurface.BorderBrush = BusyBrush;
+            TitleText.Text = "Printing";
+            StatusText.Text = $"{active} job{(active == 1 ? string.Empty : "s")} active in the printer queue.";
+            DetailText.Text = "Waiting for Xerox printer status.";
+            return;
+        }
+
         var failed = SessionQueue.Count(item => item.Status == "Failed");
+        var printed = SessionQueue.Count(item => item.Status == "Printed");
         var sent = SessionQueue.Count(item => item.Status == "Sent");
-        if (failed > 0 && sent == 0)
+        var complete = printed + sent;
+        if (failed > 0 && complete == 0)
             SetErrorState(SessionQueue.LastOrDefault(item => item.Status == "Failed")?.Detail ?? "Printing failed.");
         else if (failed > 0)
-            SetPartialState(sent, failed);
-        else if (sent > 0)
-            SetSentState(sent);
+            SetPartialState(printed, failed);
+        else if (printed > 0 && sent == 0)
+            SetPrintedState(printed);
+        else if (complete > 0)
+            SetSentState(sent, printed);
         else SetIdleState();
     }
 
@@ -400,14 +464,28 @@ public partial class MainWindow : Window
         DetailText.Text = "Drop again to retry failed files.";
     }
 
-    private void SetSentState(int total)
+    private void SetPrintedState(int total)
     {
         FadeEdgeGlow(false);
         DemonVisual.ShowDone();
         DropSurface.BorderBrush = BusyBrush;
-        TitleText.Text = "Sent";
-        StatusText.Text = $"Sent {total} file{(total == 1 ? string.Empty : "s")} to Xerox.";
-        DetailText.Text = "Queued on Xerox VersaLink C600";
+        TitleText.Text = "Printed";
+        StatusText.Text = $"Printed {total} file{(total == 1 ? string.Empty : "s")} successfully.";
+        DetailText.Text = "Xerox printer reported the job complete.";
+    }
+
+    private void SetSentState(int sent, int printed)
+    {
+        FadeEdgeGlow(false);
+        DemonVisual.ShowDone();
+        DropSurface.BorderBrush = BusyBrush;
+        TitleText.Text = "Complete";
+        StatusText.Text = printed == 0
+            ? $"Sent {sent} file{(sent == 1 ? string.Empty : "s")} to Xerox."
+            : $"Printed {printed}; sent {sent} file{(sent + printed == 1 ? string.Empty : "s")}.";
+        DetailText.Text = sent == 0
+            ? "Xerox printer reported the jobs complete."
+            : "Some jobs were accepted but final printer status was unavailable.";
     }
 
     private void SetErrorState(string message)

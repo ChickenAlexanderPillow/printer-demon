@@ -191,13 +191,96 @@ public sealed class PrinterService
             }
 
             job.Refresh();
-            if (job.IsInError || job.IsBlocked || job.IsDeleted)
+            if (job.IsInError || job.IsDeleted)
                 return new PrintSubmissionResult(false,
                     $"The printer reported a job error ({job.JobStatus}).");
-            return new PrintSubmissionResult(true, "Sent to printer.");
+            return new PrintSubmissionResult(true, "Accepted by Windows spooler.",
+                new PrintJobReference(queue.FullName, job.JobIdentifier));
         }
 
         return new PrintSubmissionResult(true, "Sent to printer.");
+    }
+
+    public PrintJobMonitoringResult WaitForCompletion(PrintJobReference reference)
+    {
+        // Drivers do not all retain completed jobs for the same amount of
+        // time. Keep polling long enough to observe normal printer queues,
+        // but do not hold the app's queue forever if the driver hides status.
+        const int maxPolls = 1200; // 20 minutes at one-second intervals
+        var observed = false;
+        using var server = new LocalPrintServer();
+        PrintQueue? queue = null;
+        try
+        {
+            queue = server.GetPrintQueue(reference.QueueName);
+            var lastStatusMessage = string.Empty;
+            for (var poll = 0; poll < maxPolls; poll++)
+            {
+                queue.Refresh();
+                if (queue.IsOffline)
+                    lastStatusMessage = "Xerox printer is offline.";
+
+                var job = queue.GetPrintJobInfoCollection()
+                    .Cast<PrintSystemJobInfo>()
+                    .FirstOrDefault(candidate => candidate.JobIdentifier == reference.JobIdentifier);
+
+                if (job is null)
+                {
+                    if (observed)
+                        return PrintJobMonitoringResult.PrintedSuccessfully("Printer completed the job.");
+
+                    Thread.Sleep(1000);
+                    continue;
+                }
+
+                observed = true;
+                job.Refresh();
+                var jobStatusMessage = DescribeXeroxJobStatus(job);
+                if (!string.IsNullOrWhiteSpace(jobStatusMessage))
+                    lastStatusMessage = jobStatusMessage;
+                if (job.IsInError || job.IsDeleted)
+                    return PrintJobMonitoringResult.FailedWith(
+                        jobStatusMessage ?? $"Xerox printer reported a job error ({job.JobStatus}).");
+                if (job.IsPrinted || job.IsCompleted)
+                    return PrintJobMonitoringResult.PrintedSuccessfully("Printer completed the job.");
+
+                Thread.Sleep(1000);
+            }
+
+            return string.IsNullOrWhiteSpace(lastStatusMessage)
+                ? PrintJobMonitoringResult.SentWithoutConfirmation(
+                    "Accepted by Windows spooler; the printer did not expose a final status.")
+                : PrintJobMonitoringResult.FailedWith(
+                    $"{lastStatusMessage} Final print status was not confirmed.");
+        }
+        catch (Exception ex)
+        {
+            return PrintJobMonitoringResult.SentWithoutConfirmation(
+                $"Accepted by Windows spooler; final status unavailable ({ex.Message}).");
+        }
+        finally
+        {
+            queue?.Dispose();
+        }
+    }
+
+    private static string? DescribeXeroxJobStatus(PrintSystemJobInfo job)
+    {
+        if (job.IsPaperOut)
+            return "Xerox printer is out of paper.";
+        if (job.IsOffline)
+            return "Xerox printer is offline.";
+        if (job.IsUserInterventionRequired)
+            return "Xerox printer needs user intervention.";
+        if (job.IsPaused)
+            return "Xerox print job is paused.";
+        if (job.IsBlocked)
+            return "Xerox printer is waiting before printing this job.";
+        if (job.IsInError)
+            return $"Xerox printer reported an error ({job.JobStatus}).";
+        if (job.IsDeleted)
+            return "Xerox print job was deleted or cancelled.";
+        return null;
     }
 
 

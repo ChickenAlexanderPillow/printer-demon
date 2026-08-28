@@ -1,37 +1,31 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
-using System.Windows.Threading;
 
 namespace PrinterDemon;
 
 public partial class DemonCharacter : UserControl
 {
-    private readonly DispatcherTimer _danceTimer;
-    private bool _dancePose;
+    private readonly RotateTransform _danceRotation = new();
+    private readonly TranslateTransform _danceTranslation = new();
 
     public DemonCharacter()
     {
         InitializeComponent();
-        _danceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(260) };
-        _danceTimer.Tick += (_, _) =>
+        CharacterImageHost.RenderTransform = new TransformGroup
         {
-            _dancePose = !_dancePose;
-            var transform = new RotateTransform(_dancePose ? -9 : 9);
-            CharacterImageHost.RenderTransform = transform;
-            CharacterImageHost.Margin = new Thickness(0, _dancePose ? -3 : 3, 0, 0);
+            Children = { _danceRotation, _danceTranslation }
         };
     }
 
     public void ShowIdle()
     {
-        _danceTimer.Stop();
         IdleDemonImage.Visibility = Visibility.Visible;
         DancingDemonImage.Visibility = Visibility.Collapsed;
         CharacterImageHost.Effect = null;
-        CharacterImageHost.RenderTransform = new RotateTransform(0);
-        CharacterImageHost.Margin = new Thickness(0);
+        StopDanceAnimation();
     }
 
     public void ShowPrinting()
@@ -41,21 +35,44 @@ public partial class DemonCharacter : UserControl
         CharacterImageHost.Effect = new DropShadowEffect
         {
             Color = Colors.Red,
-            BlurRadius = 18,
+            BlurRadius = 8,
             ShadowDepth = 0,
-            Opacity = 0.9
+            Opacity = 0.55
         };
-        _danceTimer.Start();
+        _danceRotation.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation
+        {
+            From = -7,
+            To = 7,
+            Duration = TimeSpan.FromMilliseconds(520),
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever
+        });
+        _danceTranslation.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation
+        {
+            From = -2,
+            To = 2,
+            Duration = TimeSpan.FromMilliseconds(520),
+            AutoReverse = true,
+            RepeatBehavior = RepeatBehavior.Forever
+        });
     }
 
     public void ShowDone() => ShowIdle();
 
     public void ShowError()
     {
-        _danceTimer.Stop();
         IdleDemonImage.Visibility = Visibility.Visible;
         DancingDemonImage.Visibility = Visibility.Collapsed;
         CharacterImageHost.Effect = null;
-        CharacterImageHost.RenderTransform = new RotateTransform(-4);
+        StopDanceAnimation();
+        _danceRotation.Angle = -4;
+    }
+
+    private void StopDanceAnimation()
+    {
+        _danceRotation.BeginAnimation(RotateTransform.AngleProperty, null);
+        _danceTranslation.BeginAnimation(TranslateTransform.YProperty, null);
+        _danceRotation.Angle = 0;
+        _danceTranslation.Y = 0;
     }
 }

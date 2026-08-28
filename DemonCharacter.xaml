@@ -2,6 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              Width="88" Height="88"
+             UseLayoutRounding="True"
+             SnapsToDevicePixels="True"
              ClipToBounds="False">
     <Grid x:Name="CharacterImageHost"
           Width="88" Height="88"
@@ -10,11 +12,15 @@
           RenderTransformOrigin="0.5,0.75">
         <Image x:Name="IdleDemonImage"
                Source="print demon smile.png"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               SnapsToDevicePixels="True"
                Stretch="Uniform"
                Width="80" Height="80"
                HorizontalAlignment="Center" VerticalAlignment="Center" />
         <Image x:Name="DancingDemonImage"
                Source="print demon.png"
+               RenderOptions.BitmapScalingMode="HighQuality"
+               SnapsToDevicePixels="True"
                Stretch="Uniform"
                Width="80" Height="80"
                HorizontalAlignment="Center" VerticalAlignment="Center"

@@ -44,7 +44,7 @@ public sealed class QueueItem : INotifyPropertyChanged
         set { if (_isActive == value) return; _isActive = value; OnPropertyChanged(); }
     }
 
-    public bool IsSent => string.Equals(Status, "Sent", StringComparison.Ordinal);
+    public bool IsSent => Status is "Sent" or "Printed";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
