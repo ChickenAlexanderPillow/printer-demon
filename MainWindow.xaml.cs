@@ -1,4 +1,5 @@
 using System.IO;
+using System.Net.Http;
 using System.Collections.Concurrent;
 using System.Windows;
 using System.Windows.Input;
@@ -20,11 +21,13 @@ public partial class MainWindow : Window
     private static readonly Brush ErrorBrush = Brush("#FF5964");
     private readonly DocumentRenderer _renderer = new();
     private readonly PrinterService _printer = new();
+    private readonly UpdateService _updateService = new();
     private readonly ConcurrentQueue<PrintBatch> _pendingBatches = new();
     private readonly object _queueGate = new();
     private QueueWindow? _queueWindow;
     private bool _isPrinting;
     private bool _workerRunning;
+    private bool _updateCheckStarted;
 
     public ObservableCollection<QueueItem> SessionQueue { get; } = new();
 
@@ -33,6 +36,38 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = this;
         SetIdleState();
+        Loaded += MainWindow_Loaded;
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (_updateCheckStarted) return;
+        _updateCheckStarted = true;
+
+        try
+        {
+            var update = await _updateService.CheckAsync();
+            if (update is null) return;
+
+            var details = string.IsNullOrWhiteSpace(update.Notes)
+                ? $"Printer Demon {update.Version} is available. Install it now?"
+                : $"Printer Demon {update.Version} is available.\n\n{update.Notes}\n\nInstall it now?";
+            var answer = MessageBox.Show(
+                details,
+                "Printer Demon update available",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information);
+
+            if (answer == MessageBoxResult.Yes)
+            {
+                await _updateService.InstallAndRestartAsync(update);
+                Close();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            // Updates are optional; offline or unavailable GitHub releases must not block printing.
+        }
     }
 
     private void QueuePopOut_Click(object sender, RoutedEventArgs e)

@@ -1,0 +1,52 @@
+name: Publish Printer Demon
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      - name: Calculate version
+        id: version
+        shell: pwsh
+        run: |
+          $project = [xml](Get-Content PrinterDemon.csproj)
+          $base = ($project.Project.PropertyGroup.Version | Select-Object -First 1).Trim()
+          $version = "$base.${{ github.run_number }}"
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Publish
+        run: dotnet publish PrinterDemon.csproj --configuration Release --runtime win-x64 --self-contained true --output publish -p:Version=${{ steps.version.outputs.version }} -p:AssemblyVersion=${{ steps.version.outputs.version }} -p:FileVersion=${{ steps.version.outputs.version }} -p:PublishSingleFile=true
+
+      - name: Prepare update files
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $exe = "publish/PrinterDemon.exe"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $url = "https://github.com/${{ github.repository }}/releases/download/v$version/PrinterDemon.exe"
+          @{ version = $version; url = $url; sha256 = $hash; notes = "" } | ConvertTo-Json | Set-Content publish/latest.json
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Printer Demon ${{ steps.version.outputs.version }}
+          generate_release_notes: false
+          files: |
+            publish/PrinterDemon.exe
+            publish/latest.json
