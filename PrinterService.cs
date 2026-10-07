@@ -309,6 +309,7 @@ public sealed class PrinterService
     {
         var ticket = queue.DefaultPrintTicket.Clone();
         ticket.PageResolution = new PageResolution(600, 600);
+        ticket.Duplexing = Duplexing.OneSided;
         var ticketXml = ReadXml(ticket);
         if (string.IsNullOrWhiteSpace(ticketXml))
             throw new InvalidOperationException("The Xerox driver did not provide a usable print ticket.");
@@ -330,6 +331,7 @@ public sealed class PrinterService
         ReplaceFeatureOptionIfPresent(printTicket, "PageOutputQuality", "psk:High");
         ReplaceFeatureOption(printTicket, "PageOutputColor", "psk:Color");
         ReplaceFeatureOption(printTicket, "PageResolution", resolutionOption);
+        ReplaceFeatureOptionIfPresent(printTicket, "JobDuplexAllDocumentsContiguously", "psk:OneSided");
         SetParameter(printTicket, "PageMediaSizeMediaSizeWidth", "210000");
         SetParameter(printTicket, "PageMediaSizeMediaSizeHeight", "297000");
         ticket = CreatePrintTicket(printTicket);
@@ -337,6 +339,8 @@ public sealed class PrinterService
         var validation = queue.MergeAndValidatePrintTicket(queue.DefaultPrintTicket, ticket);
         if (validation.ValidatedPrintTicket is null)
             throw new InvalidOperationException("The Xerox printer rejected the A4 / Tray 1 print ticket.");
+        if (validation.ValidatedPrintTicket.Duplexing != Duplexing.OneSided)
+            throw new InvalidOperationException("The Xerox printer did not accept the single-sided print setting.");
         return validation.ValidatedPrintTicket;
     }
 

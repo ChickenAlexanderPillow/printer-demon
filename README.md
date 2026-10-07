@@ -58,9 +58,10 @@ do not use it. The complete folder or ZIP is still recommended, but PDF support
 can recover the embedded runtime if someone copies only the EXE.
 
 Drop PDFs or JPG, JPEG, PNG, TIFF, or BMP files onto the tile. Jobs are sent
-automatically using A4 media from Tray 1, while inheriting the printer's saved
-settings for the remaining print options, with 400 DPI shrink-to-fit rendering
-and high output quality.
+automatically using A4 media from Tray 1 and forced to single-sided printing,
+regardless of the Windows queue's duplex setting. Other supported print options
+inherit the printer's saved settings, with 400 DPI shrink-to-fit rendering and
+high output quality.
 The app does not add a print delay; it submits jobs immediately.
 Additional files can be dropped while printing; they are appended to the
 single ordered session queue and submitted as soon as the current spool
