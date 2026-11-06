@@ -28,23 +28,19 @@ public sealed class PrinterService
         var queues = server.GetPrintQueues().ToArray();
         var exact = queues.FirstOrDefault(queue =>
             string.Equals(queue.FullName, requestedName, StringComparison.OrdinalIgnoreCase)
-            && queue.QueueDriver.Name.Contains("Xerox", StringComparison.OrdinalIgnoreCase)
+            && queue.QueueDriver.Name.Contains("Xerox VersaLink C600 V4 PS", StringComparison.OrdinalIgnoreCase)
             && !queue.IsOffline);
         if (exact is not null) return exact;
 
         var matches = queues
             .Where(queue => queue.FullName.Contains("VersaLink C600", StringComparison.OrdinalIgnoreCase))
             .Where(queue => !queue.IsOffline)
-            // Do not use Microsoft's generic IPP class driver. It produces
-            // lower-quality output and does not expose the Xerox media model.
-            .Where(queue => queue.QueueDriver.Name.Contains("Xerox", StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(queue => queue.QueueDriver.Name.Contains("Xerox VersaLink C600 V4 PS", StringComparison.OrdinalIgnoreCase))
-            // Windows often leaves duplicate '(Copy N)' queues behind after
-            // an IPP/WSD driver reinstall. Prefer the original queue next.
-            .ThenBy(queue => queue.FullName.Contains("(Copy", StringComparison.OrdinalIgnoreCase) ? 1 : 0)
+            // Use only the supported driver: it exposes the XPS print ticket
+            // required to override per-PC scaling and other queue defaults.
+            .Where(queue => queue.QueueDriver.Name.Contains("Xerox VersaLink C600 V4 PS", StringComparison.OrdinalIgnoreCase))
             .ToArray();
         return matches.FirstOrDefault()
-            ?? throw new InvalidOperationException("No online Xerox VersaLink C600 queue using a Xerox driver was found. Install the Xerox C600 driver and recreate the queue.");
+            ?? throw new InvalidOperationException("No online Xerox VersaLink C600 queue using the Xerox VersaLink C600 V4 PS driver was found. Install that driver and recreate the queue.");
     }
 
     public void Validate()
@@ -63,30 +59,26 @@ public sealed class PrinterService
         using var server = new LocalPrintServer();
         var queue = ResolveQueue(server, _settings.PrinterName);
 
-        // Xerox installations vary: some accept XPS, while others accept
-        // GDI/EMF. Try the path appropriate to the installed driver first,
-        // then retry once through the other spool format after an immediate
-        // rejection.
-        var prefersXps = queue.QueueDriver.Name.Contains("Xerox VersaLink C600 V4 PS", StringComparison.OrdinalIgnoreCase);
-        var first = TrySubmit(() => prefersXps
-            ? PrintXpsPages(queue, pages, jobName)
-            : PrintRasterPages(pages, jobName));
-        if (first.Completed) return first;
-
-        var second = TrySubmit(() => prefersXps
-            ? PrintRasterPages(pages, jobName)
-            : PrintXpsPages(queue, pages, jobName));
-        if (second.Completed) return second;
-
-        return new PrintSubmissionResult(false,
-            $"The Xerox queue rejected both print formats. First attempt: {first.Message} Second attempt: {second.Message}");
+        // Keep all computers on the same XPS path. The raster fallback cannot
+        // validate or override the queue's page-scaling feature.
+        try
+        {
+            return TrySubmit(() => PrintXpsPages(queue, pages, jobName));
+        }
+        catch (PrintScalingNotGuaranteedException ex)
+        {
+            return new PrintSubmissionResult(false, ex.Message);
+        }
     }
 
     private static PrintSubmissionResult TrySubmit(Func<PrintSubmissionResult> submit)
     {
         try { return submit(); }
+        catch (PrintScalingNotGuaranteedException) { throw; }
         catch (Exception ex) { return new PrintSubmissionResult(false, ex.Message); }
     }
+
+    private sealed class PrintScalingNotGuaranteedException(string message) : InvalidOperationException(message) { }
 
     private PrintSubmissionResult PrintXpsPages(
         PrintQueue queue, IReadOnlyList<RenderedPage> pages, string jobName)
@@ -333,7 +325,7 @@ public sealed class PrinterService
         ReplaceFeatureOption(printTicket, "PageResolution", resolutionOption);
         // Do not inherit a queue-level reduction/enlargement setting. The
         // FixedDocument is already laid out at the intended A4 size.
-        ReplaceFeatureOptionIfPresent(printTicket, "PageScaling", "psk:None");
+        SetPageScalingNone(printTicket);
         ReplaceFeatureOptionIfPresent(printTicket, "JobDuplexAllDocumentsContiguously", "psk:OneSided");
         SetParameter(printTicket, "PageMediaSizeMediaSizeWidth", "210000");
         SetParameter(printTicket, "PageMediaSizeMediaSizeHeight", "297000");
@@ -344,6 +336,13 @@ public sealed class PrinterService
             throw new InvalidOperationException("The Xerox printer rejected the A4 / Tray 1 print ticket.");
         if (validation.ValidatedPrintTicket.Duplexing != Duplexing.OneSided)
             throw new InvalidOperationException("The Xerox printer did not accept the single-sided print setting.");
+        var validatedXml = XDocument.Parse(ReadXml(validation.ValidatedPrintTicket));
+        var validatedScaling = FindFeature(validatedXml, "PageScaling")?
+            .Elements().FirstOrDefault(element => element.Name.LocalName == "Option")?
+            .Attribute("name")?.Value;
+        if (!string.Equals(validatedScaling?.Split(':').Last(), "None", StringComparison.OrdinalIgnoreCase))
+            throw new PrintScalingNotGuaranteedException(
+                "The Xerox driver did not accept the no-scaling setting. Printing was stopped to avoid reduced-size output.");
         return validation.ValidatedPrintTicket;
     }
 
@@ -388,13 +387,38 @@ public sealed class PrinterService
 
     private static void ReplaceFeatureOptionIfPresent(XDocument ticket, string featureSuffix, string optionName)
     {
-        var feature = ticket.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "Feature" &&
-            (element.Attribute("name")?.Value ?? string.Empty).EndsWith(featureSuffix, StringComparison.OrdinalIgnoreCase));
+        var feature = FindFeature(ticket, featureSuffix);
         if (feature is null) return;
         feature.Elements().Where(element => element.Name.LocalName == "Option").Remove();
         feature.Add(new XElement(feature.Name.Namespace + "Option", new XAttribute("name", optionName)));
     }
+
+    private static void SetPageScalingNone(XDocument ticket)
+    {
+        var feature = FindFeature(ticket, "PageScaling");
+        if (feature is null)
+        {
+            XNamespace framework = "http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework";
+            XNamespace xsi = "http://www.w3.org/2001/XMLSchema-instance";
+            XNamespace xs = "http://www.w3.org/2001/XMLSchema";
+            feature = new XElement(framework + "Feature",
+                new XAttribute("name", "psk:PageScaling"),
+                new XElement(framework + "Property",
+                    new XAttribute("name", "psf:SelectionType"),
+                    new XElement(framework + "Value", new XAttribute(xsi + "type", "xs:string"), "psk:PickOne")),
+                new XElement(framework + "Option", new XAttribute("name", "psk:None")));
+            ticket.Root?.Add(feature);
+        }
+        else
+        {
+            feature.Elements().Where(element => element.Name.LocalName == "Option").Remove();
+            feature.Add(new XElement(feature.Name.Namespace + "Option", new XAttribute("name", "psk:None")));
+        }
+    }
+
+    private static XElement? FindFeature(XDocument ticket, string featureSuffix) => ticket.Descendants().FirstOrDefault(element =>
+        element.Name.LocalName == "Feature" &&
+        (element.Attribute("name")?.Value ?? string.Empty).EndsWith(featureSuffix, StringComparison.OrdinalIgnoreCase));
 
     private static void SetParameter(XDocument ticket, string parameterName, string value)
     {
