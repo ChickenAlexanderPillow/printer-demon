@@ -331,6 +331,9 @@ public sealed class PrinterService
         ReplaceFeatureOptionIfPresent(printTicket, "PageOutputQuality", "psk:High");
         ReplaceFeatureOption(printTicket, "PageOutputColor", "psk:Color");
         ReplaceFeatureOption(printTicket, "PageResolution", resolutionOption);
+        // Do not inherit a queue-level reduction/enlargement setting. The
+        // FixedDocument is already laid out at the intended A4 size.
+        ReplaceFeatureOptionIfPresent(printTicket, "PageScaling", "psk:None");
         ReplaceFeatureOptionIfPresent(printTicket, "JobDuplexAllDocumentsContiguously", "psk:OneSided");
         SetParameter(printTicket, "PageMediaSizeMediaSizeWidth", "210000");
         SetParameter(printTicket, "PageMediaSizeMediaSizeHeight", "297000");
