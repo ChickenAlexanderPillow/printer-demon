@@ -68,9 +68,6 @@
                                        TextTrimming="CharacterEllipsis" />
                             <TextBlock Text="{Binding Detail}" FontSize="10"
                                        Foreground="#7F8790" TextTrimming="CharacterEllipsis" />
-                            <TextBlock Text="{Binding SetupWarning}" FontSize="10"
-                                       Foreground="#E0A84F" TextWrapping="Wrap"
-                                       Visibility="{Binding HasSetupWarning, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         </StackPanel>
                         <ProgressBar Grid.Column="1" Width="78" Height="6"
                                      Margin="8,0" VerticalAlignment="Center"

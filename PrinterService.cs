@@ -18,7 +18,7 @@ namespace PrinterDemon;
 public sealed class PrinterService
 {
     // Captured from the user's known-good C600 queue. Keep these values as
-    // the cross-PC benchmark; a mismatch is reported only when a job is sent.
+    // the cross-PC benchmark; differences are retained only for diagnostics.
     private const string BenchmarkQueueName = "Xerox VersaLink C600 (8a:c6:4a)";
     private const string BenchmarkDriverName = "Xerox VersaLink C600 V4 PS";
     private const string BenchmarkDriverVersion = "7.95.0.0";
@@ -99,6 +99,40 @@ public sealed class PrinterService
         var pageScalingSupported = queue.GetPrintCapabilities().PageScalingFactorRange is not null;
         Compare(warnings, "Page scaling support", pageScalingSupported.ToString(), BenchmarkPageScalingSupported.ToString());
         return warnings;
+    }
+
+    public string CreateConfigurationDiagnosticReport()
+    {
+        IReadOnlyList<string>? differences = null;
+        string? comparisonError = null;
+        try { differences = CheckQueueConfiguration(); }
+        catch (Exception ex) { comparisonError = ex.Message; }
+
+        return System.Text.Json.JsonSerializer.Serialize(new
+        {
+            CapturedAtUtc = DateTime.UtcNow,
+            RequestedPrintSettings = _settings,
+            Benchmark = new
+            {
+                Queue = BenchmarkQueueName,
+                Driver = BenchmarkDriverName,
+                DriverPackageVersion = BenchmarkDriverVersion,
+                Port = BenchmarkPortName,
+                PrinterAddress = BenchmarkPrinterAddress,
+                PortNumber = BenchmarkPortNumber,
+                PortProtocol = BenchmarkPortProtocol,
+                PaperSize = BenchmarkPaperSize,
+                InputBin = BenchmarkInputBin,
+                JobInputBin = "unset",
+                Duplex = BenchmarkDuplex,
+                Color = BenchmarkColor,
+                Resolution = BenchmarkResolution,
+                Scaling = "unset",
+                PageScalingSupported = BenchmarkPageScalingSupported
+            },
+            Differences = differences,
+            ComparisonError = comparisonError
+        }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
     }
 
     private static void Compare(ICollection<string> warnings, string setting, string actual, string expected)

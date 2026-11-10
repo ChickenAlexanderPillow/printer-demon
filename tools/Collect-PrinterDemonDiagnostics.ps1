@@ -1,6 +1,11 @@
+param(
+    [string] $AppDirectory = (Split-Path $PSScriptRoot -Parent),
+    [string] $ContextDirectory
+)
+
 $ErrorActionPreference = 'SilentlyContinue'
 
-$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+$stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $outDir = Join-Path ([Environment]::GetFolderPath('Desktop')) "PrinterDemon-Diagnostics-$stamp"
 New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 $report = Join-Path $outDir 'report.txt'
@@ -16,6 +21,8 @@ function Write-Report([object] $value) {
 "Printer Demon diagnostics" | Set-Content -LiteralPath $report
 "Created: $(Get-Date -Format o)" | Add-Content -LiteralPath $report
 "Computer: $env:COMPUTERNAME" | Add-Content -LiteralPath $report
+"App directory: $AppDirectory" | Add-Content -LiteralPath $report
+"App version: $([Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $AppDirectory 'PrinterDemon.exe')).FileVersion)" | Add-Content -LiteralPath $report
 
 Section 'Windows'
 Write-Report (Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, BuildNumber, OSArchitecture, LastBootUpTime)
@@ -68,8 +75,7 @@ foreach ($queue in $queues) {
 
 Section 'Ghostscript'
 $gsCandidates = @(
-    (Join-Path $PSScriptRoot 'ghostscript\installed\bin\gswin64c.exe'),
-    (Join-Path (Split-Path $PSScriptRoot -Parent) 'tools\ghostscript\installed\bin\gswin64c.exe'),
+    (Join-Path $AppDirectory 'tools\ghostscript\installed\bin\gswin64c.exe'),
     'C:\Program Files\gs\gs*\bin\gswin64c.exe'
 )
 foreach ($candidate in $gsCandidates) {
@@ -92,6 +98,12 @@ Section 'Recent system print errors'
 $systemEvents = Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderName = 'PrintService'; StartTime = (Get-Date).AddDays(-7) } -MaxEvents 50 |
     Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message
 Write-Report $systemEvents
+
+if ($ContextDirectory) {
+    foreach ($fileName in @('benchmark-comparison.json', 'session-queue.json')) {
+        Copy-Item -LiteralPath (Join-Path $ContextDirectory $fileName) -Destination $outDir -ErrorAction Stop
+    }
+}
 
 $archivePath = "$outDir.zip"
 Compress-Archive -Path (Join-Path $outDir '*') -DestinationPath $archivePath -Force -ErrorAction Stop

@@ -9,6 +9,7 @@ using System.Windows.Media.Animation;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 
 namespace PrinterDemon;
 
@@ -23,7 +24,6 @@ public partial class MainWindow : Window
     private static readonly Brush ActiveBrush = Brush("#C6532D");
     private static readonly Brush BusyBrush = Brush("#D89535");
     private static readonly Brush ErrorBrush = Brush("#B83A3A");
-    private static readonly Brush SetupWarningBrush = Brush("#C58A32");
     private readonly DocumentRenderer _renderer = new();
     private readonly PrinterService _printer = new();
     private readonly UpdateService _updateService = new();
@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContext = this;
+        VersionText.Text = $"v{typeof(MainWindow).Assembly.GetName().Version}";
         SetIdleState();
         Loaded += MainWindow_Loaded;
     }
@@ -63,9 +64,6 @@ public partial class MainWindow : Window
         try
         {
             var update = await _updateService.CheckAsync(!HasSkipUpdateCheckArgument());
-            if (_updateService.LatestVersion is not null)
-                VersionText.Text = $"v{_updateService.LatestVersion}";
-
             if (update is null) return;
 
             var details = string.IsNullOrWhiteSpace(update.Notes)
@@ -185,11 +183,28 @@ public partial class MainWindow : Window
         if (_diagnosticExportRunning) return;
         _diagnosticExportRunning = true;
         StatusText.Text = "Preparing diagnostic export…";
+        var contextDirectory = Path.Combine(Path.GetTempPath(), $"PrinterDemon-diagnostics-{Guid.NewGuid():N}");
+        var scriptPath = Path.Combine(contextDirectory, "collector.ps1");
         try
         {
-            var scriptPath = Path.Combine(AppContext.BaseDirectory, "tools", "Collect-PrinterDemonDiagnostics.ps1");
-            if (!File.Exists(scriptPath))
-                throw new FileNotFoundException("The diagnostic collector is missing from this installation.", scriptPath);
+            Directory.CreateDirectory(contextDirectory);
+            var configurationReport = await StaTaskRunner.RunAsync(_printer.CreateConfigurationDiagnosticReport);
+            var sessionReport = JsonSerializer.Serialize(SessionQueue.Select(item => new
+            {
+                item.FileName,
+                item.Status,
+                item.Detail,
+                BenchmarkDifferencesAtSubmission = item.SetupWarning
+            }), new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(Path.Combine(contextDirectory, "benchmark-comparison.json"), configurationReport);
+            await File.WriteAllTextAsync(Path.Combine(contextDirectory, "session-queue.json"), sessionReport);
+
+            // Updates replace just the EXE. Keep the collector inside that EXE,
+            // extracting a unique temporary copy only while an export runs.
+            using (var collector = typeof(MainWindow).Assembly.GetManifestResourceStream("PrinterDemon.DiagnosticsCollector.ps1")
+                ?? throw new InvalidOperationException("The embedded diagnostic collector is unavailable."))
+            await using (var destination = File.Create(scriptPath))
+                await collector.CopyToAsync(destination);
 
             var start = new ProcessStartInfo("powershell.exe")
             {
@@ -205,6 +220,10 @@ public partial class MainWindow : Window
             start.ArgumentList.Add("Bypass");
             start.ArgumentList.Add("-File");
             start.ArgumentList.Add(scriptPath);
+            start.ArgumentList.Add("-AppDirectory");
+            start.ArgumentList.Add(AppContext.BaseDirectory);
+            start.ArgumentList.Add("-ContextDirectory");
+            start.ArgumentList.Add(contextDirectory);
 
             using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the diagnostics collector.");
             var outputTask = process.StandardOutput.ReadToEndAsync();
@@ -216,8 +235,9 @@ public partial class MainWindow : Window
             }
             catch (OperationCanceledException)
             {
-                process.Kill(entireProcessTree: true);
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
                 await process.WaitForExitAsync();
+                await Task.WhenAll(outputTask, errorTask);
                 throw new TimeoutException("Diagnostics collection took longer than two minutes.");
             }
             var output = await outputTask;
@@ -240,6 +260,15 @@ public partial class MainWindow : Window
         }
         finally
         {
+            foreach (var fileName in new[] { "collector.ps1", "benchmark-comparison.json", "session-queue.json" })
+            {
+                try { File.Delete(Path.Combine(contextDirectory, fileName)); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            try { if (Directory.Exists(contextDirectory)) Directory.Delete(contextDirectory); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
             _diagnosticExportRunning = false;
         }
     }
@@ -521,9 +550,6 @@ public partial class MainWindow : Window
             TitleText.Text = "Printing";
             StatusText.Text = $"{active} job{(active == 1 ? string.Empty : "s")} active in the printer queue.";
             DetailText.Text = "Waiting for Xerox printer status.";
-            var activeWarning = SessionQueue.LastOrDefault(item => item.IsActive && item.HasSetupWarning);
-            if (activeWarning is not null)
-                SetSetupWarningState(activeWarning, active: true);
             return;
         }
 
@@ -541,22 +567,6 @@ public partial class MainWindow : Window
             SetSentState(sent, printed);
         else SetIdleState();
 
-        var latestCompleted = SessionQueue.LastOrDefault(item => item.Status is "Sent" or "Printed" or "Failed");
-        if (latestCompleted?.HasSetupWarning == true)
-            SetSetupWarningState(latestCompleted, active: false);
-    }
-
-    private void SetSetupWarningState(QueueItem item, bool active)
-    {
-        DropSurface.BorderBrush = SetupWarningBrush;
-        TitleText.Text = active ? "Printing" : "Check Setup";
-        StatusText.Text = active
-            ? "This printer queue differs from the benchmark PC."
-            : item.Status == "Failed"
-                ? "Job failed; this printer queue differs from the benchmark PC."
-                : "Job sent; this printer queue differs from the benchmark PC.";
-        DetailText.Text = item.SetupWarning.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
-            ?? "Open the queue to review the printer setup differences.";
     }
 
     private static bool TryGetFiles(DragEventArgs e, out IReadOnlyList<string> files)

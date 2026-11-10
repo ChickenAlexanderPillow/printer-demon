@@ -3,12 +3,12 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:PrinterDemon"
         Title="Printer Demon"
-        Width="380"
-        Height="460"
-        MinWidth="380"
-        MinHeight="460"
-        MaxWidth="380"
-        MaxHeight="460"
+        Width="400"
+        Height="400"
+        MinWidth="400"
+        MinHeight="400"
+        MaxWidth="400"
+        MaxHeight="400"
         WindowStyle="None"
         ResizeMode="NoResize"
         ShowInTaskbar="True"
@@ -32,32 +32,40 @@
               MouseLeftButtonDown="Window_MouseLeftButtonDown">
         <Border x:Name="DropSurface"
                 Margin="12"
-                Padding="26"
+                Padding="22"
                 CornerRadius="18"
                 BorderThickness="0"
                 Background="{StaticResource TileSurfaceBrush}">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="100" />
+                    <RowDefinition Height="90" />
+                    <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="18" />
+                    <RowDefinition Height="14" />
                 </Grid.RowDefinitions>
                 <Grid Grid.Row="0" Margin="0,0,0,12">
                     <local:DemonCharacter x:Name="DemonVisual" HorizontalAlignment="Center"
                                           VerticalAlignment="Top" Margin="0,0,0,0" />
                 </Grid>
-                <StackPanel Grid.Row="1" VerticalAlignment="Top" Margin="0,8,0,22">
-                    <TextBlock x:Name="TitleText" Text="Drop Files" FontSize="34" FontWeight="SemiBold"
+                <Grid Grid.Row="1" Margin="0,4,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="TitleText" Text="Drop Files" FontSize="32" FontWeight="SemiBold"
                                Foreground="{StaticResource StatusBrush}" TextAlignment="Center" />
+                    <ScrollViewer Grid.Row="1" Margin="0,8,0,0"
+                                  VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  PanningMode="VerticalOnly">
                     <TextBlock x:Name="StatusText"
                                Text="Drop PDFs or images to print."
                                FontSize="14" Foreground="{StaticResource HintBrush}"
                                TextAlignment="Center" TextWrapping="Wrap" MaxWidth="284"
-                               HorizontalAlignment="Center" Margin="0,12,0,0" />
-                </StackPanel>
+                               HorizontalAlignment="Center" />
+                    </ScrollViewer>
+                </Grid>
                 <Border Grid.Row="2" Background="{StaticResource PanelBrush}"
-                        CornerRadius="11" Padding="12,10" Margin="0,0,0,14">
+                        CornerRadius="11" Padding="12,10" Margin="0,14,0,8">
                     <StackPanel>
                     <TextBlock x:Name="DetailText" FontSize="11" Foreground="{StaticResource HintBrush}"
                                TextAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="250" />
@@ -77,7 +85,7 @@
                     <ListBox x:Name="QueueList"
                              HorizontalAlignment="Stretch"
                              MinHeight="0"
-                             MaxHeight="96"
+                             MaxHeight="60"
                              ItemsSource="{Binding SessionQueue}"
                              Background="Transparent"
                              BorderThickness="0"
