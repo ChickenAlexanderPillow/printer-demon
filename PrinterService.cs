@@ -325,7 +325,12 @@ public sealed class PrinterService
         ReplaceFeatureOption(printTicket, "PageResolution", resolutionOption);
         // Do not inherit a queue-level reduction/enlargement setting. The
         // FixedDocument is already laid out at the intended A4 size.
-        SetPageScalingNone(printTicket);
+        // Some Xerox driver builds do not advertise PageScaling at all. In
+        // that case there is no driver scaling control to override; keep the
+        // FixedDocument and ticket media both at A4. When the driver does
+        // expose scaling, explicitly request and validate None.
+        var scalingSupported = queue.GetPrintCapabilities().PageScalingFactorRange is not null;
+        if (scalingSupported) SetPageScalingNone(printTicket);
         ReplaceFeatureOptionIfPresent(printTicket, "JobDuplexAllDocumentsContiguously", "psk:OneSided");
         SetParameter(printTicket, "PageMediaSizeMediaSizeWidth", "210000");
         SetParameter(printTicket, "PageMediaSizeMediaSizeHeight", "297000");
@@ -340,7 +345,7 @@ public sealed class PrinterService
         var validatedScaling = FindFeature(validatedXml, "PageScaling")?
             .Elements().FirstOrDefault(element => element.Name.LocalName == "Option")?
             .Attribute("name")?.Value;
-        if (!string.Equals(validatedScaling?.Split(':').Last(), "None", StringComparison.OrdinalIgnoreCase))
+        if (scalingSupported && !string.Equals(validatedScaling?.Split(':').Last(), "None", StringComparison.OrdinalIgnoreCase))
             throw new PrintScalingNotGuaranteedException(
                 "The Xerox driver did not accept the no-scaling setting. Printing was stopped to avoid reduced-size output.");
         return validation.ValidatedPrintTicket;
@@ -405,7 +410,7 @@ public sealed class PrinterService
                 new XAttribute("name", "psk:PageScaling"),
                 new XElement(framework + "Property",
                     new XAttribute("name", "psf:SelectionType"),
-                    new XElement(framework + "Value", new XAttribute(xsi + "type", "xs:string"), "psk:PickOne")),
+                    new XElement(framework + "Value", new XAttribute(xsi + "type", "xsd:string"), "psk:PickOne")),
                 new XElement(framework + "Option", new XAttribute("name", "psk:None")));
             ticket.Root?.Add(feature);
         }
