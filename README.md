@@ -50,6 +50,11 @@ To remove all old installations and leftovers, run
 
 ## Publish
 
+`Version` in `PrinterDemon.csproj` is the source for the app, installer,
+update manifest, and GitHub release version. Bump that four-part version before
+pushing a new release to `main`. The workflow rejects older versions and tags
+already assigned to another commit; rerunning the same commit is allowed.
+
 The release includes Ghostscript under `tools/ghostscript/installed`, and the
 runtime is also embedded in the EXE as a fallback. Ghostscript is the PDF
 rendering engine used to convert dropped PDF pages into images before they are

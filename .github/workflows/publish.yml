@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: printer-demon-release
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-latest
@@ -22,28 +26,39 @@ jobs:
         with:
           dotnet-version: 8.x
 
-      - name: Calculate version
+      - name: Read and validate project version
         id: version
         shell: pwsh
         run: |
+          $version = (dotnet msbuild PrinterDemon.csproj -nologo -getProperty:Version).Trim()
+          if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            throw "Expected a four-part Version in PrinterDemon.csproj; got '$version'."
+          }
+          $projectVersion = [System.Version]::Parse($version)
           $latestTag = git tag --list 'v*' --sort=-v:refname |
             Where-Object { $_ -match '^v\d+\.\d+\.\d+\.\d+$' } |
             Select-Object -First 1
 
           if ($latestTag) {
             $latestVersion = [System.Version]::Parse($latestTag.Substring(1))
-            $version = '{0}.{1}.{2}.{3}' -f $latestVersion.Major, $latestVersion.Minor,
-              $latestVersion.Build, ($latestVersion.Revision + 1)
-          } else {
-            $version = '0.1.0.1'
+            if ($projectVersion -lt $latestVersion) {
+              throw "Project version $version is older than release $latestTag. Bump Version in PrinterDemon.csproj."
+            }
+            if ($projectVersion -eq $latestVersion) {
+              $tagCommit = git rev-list -n 1 $latestTag
+              $headCommit = git rev-parse HEAD
+              if ($tagCommit -ne $headCommit) {
+                throw "Release $latestTag already belongs to another commit. Bump Version in PrinterDemon.csproj."
+              }
+            }
           }
 
           Write-Host "Latest release tag: $latestTag"
-          Write-Host "Next release version: $version"
+          Write-Host "Project and release version: $version"
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Publish
-        run: dotnet publish PrinterDemon.csproj --configuration Release --runtime win-x64 --self-contained true --output publish -p:Version=${{ steps.version.outputs.version }} -p:AssemblyVersion=${{ steps.version.outputs.version }} -p:FileVersion=${{ steps.version.outputs.version }} -p:PublishSingleFile=true
+        run: dotnet publish PrinterDemon.csproj --configuration Release --runtime win-x64 --self-contained true --output publish -p:PublishSingleFile=true
 
       - name: Prepare update files
         shell: pwsh
