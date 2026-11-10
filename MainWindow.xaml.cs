@@ -7,6 +7,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Text;
 
 namespace PrinterDemon;
 
@@ -21,6 +23,7 @@ public partial class MainWindow : Window
     private static readonly Brush ActiveBrush = Brush("#C6532D");
     private static readonly Brush BusyBrush = Brush("#D89535");
     private static readonly Brush ErrorBrush = Brush("#B83A3A");
+    private static readonly Brush SetupWarningBrush = Brush("#C58A32");
     private readonly DocumentRenderer _renderer = new();
     private readonly PrinterService _printer = new();
     private readonly UpdateService _updateService = new();
@@ -31,6 +34,9 @@ public partial class MainWindow : Window
     private bool _workerRunning;
     private bool _updateCheckStarted;
     private bool _closeWithoutWarning;
+    private readonly StringBuilder _diagnosticShortcut = new();
+    private DateTime _lastShortcutKeyAt = DateTime.MinValue;
+    private bool _diagnosticExportRunning;
 
     public ObservableCollection<QueueItem> SessionQueue { get; } = new();
 
@@ -137,7 +143,105 @@ public partial class MainWindow : Window
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape) Close();
+        if (e.Key == Key.Escape)
+        {
+            Close();
+            return;
+        }
+
+        if (e.Key is Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl
+            or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
+            return;
+
+        var now = DateTime.UtcNow;
+        if (now - _lastShortcutKeyAt > TimeSpan.FromSeconds(2))
+            _diagnosticShortcut.Clear();
+        _lastShortcutKeyAt = now;
+
+        var character = e.Key switch
+        {
+            Key.F => 'f', Key.I => 'i', Key.D => 'd', Key.E => 'e',
+            Key.L => 'l', Key.O => 'o', _ => '\0'
+        };
+        if (character == '\0')
+        {
+            _diagnosticShortcut.Clear();
+            return;
+        }
+
+        _diagnosticShortcut.Append(character);
+        if (_diagnosticShortcut.Length > 7)
+            _diagnosticShortcut.Remove(0, _diagnosticShortcut.Length - 7);
+        if (_diagnosticShortcut.ToString() == "fidelio")
+        {
+            _diagnosticShortcut.Clear();
+            _ = ExportDiagnosticsAsync();
+            e.Handled = true;
+        }
+    }
+
+    private async Task ExportDiagnosticsAsync()
+    {
+        if (_diagnosticExportRunning) return;
+        _diagnosticExportRunning = true;
+        StatusText.Text = "Preparing diagnostic export…";
+        try
+        {
+            var scriptPath = Path.Combine(AppContext.BaseDirectory, "tools", "Collect-PrinterDemonDiagnostics.ps1");
+            if (!File.Exists(scriptPath))
+                throw new FileNotFoundException("The diagnostic collector is missing from this installation.", scriptPath);
+
+            var start = new ProcessStartInfo("powershell.exe")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WorkingDirectory = AppContext.BaseDirectory
+            };
+            start.ArgumentList.Add("-NoProfile");
+            start.ArgumentList.Add("-NonInteractive");
+            start.ArgumentList.Add("-ExecutionPolicy");
+            start.ArgumentList.Add("Bypass");
+            start.ArgumentList.Add("-File");
+            start.ArgumentList.Add(scriptPath);
+
+            using var process = Process.Start(start) ?? throw new InvalidOperationException("Could not start the diagnostics collector.");
+            var outputTask = process.StandardOutput.ReadToEndAsync();
+            var errorTask = process.StandardError.ReadToEndAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+                throw new TimeoutException("Diagnostics collection took longer than two minutes.");
+            }
+            var output = await outputTask;
+            var error = await errorTask;
+            if (process.ExitCode != 0)
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(error) ? "Diagnostics collection failed." : error.Trim());
+
+            var archivePath = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Trim())
+                .LastOrDefault(line => line.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+            if (archivePath is null || !File.Exists(archivePath))
+                throw new InvalidOperationException("The diagnostics collector finished without creating its ZIP export.");
+
+            StatusText.Text = "Diagnostic export saved to your Desktop.";
+            Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true, ArgumentList = { "/select,", archivePath } });
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Diagnostic export failed: {ex.Message}";
+        }
+        finally
+        {
+            _diagnosticExportRunning = false;
+        }
     }
 
     private void Window_DragEnter(object sender, DragEventArgs e) => UpdateDragState(e);
@@ -255,8 +359,17 @@ public partial class MainWindow : Window
                         .Take(MaxFilesPerBundle)
                         .ToArray();
                     var temp = Path.Combine(Path.GetTempPath(), "PrinterDemon", Guid.NewGuid().ToString("N"));
+                    IReadOnlyList<string> setupWarnings = Array.Empty<string>();
                     try
                     {
+                        try
+                        {
+                            setupWarnings = _printer.CheckQueueConfiguration();
+                        }
+                        catch (Exception checkError)
+                        {
+                            setupWarnings = new[] { $"Queue settings could not be compared with this PC's benchmark: {checkError.Message}" };
+                        }
                         using var renderGate = new SemaphoreSlim(MaxConcurrentRenders);
                         var renderTasks = new Task<IReadOnlyList<RenderedPage>>[chunk.Length];
                         for (var index = 0; index < chunk.Length; index++)
@@ -265,7 +378,7 @@ public partial class MainWindow : Window
                             var globalIndex = chunkIndex * MaxFilesPerBundle + index;
                             UpdateQueueItem(item, "Printing", batch.Items.Count == 1
                                 ? "Rendering document"
-                                : $"Rendering file {globalIndex + 1}/{batch.Items.Count}");
+                                : $"Rendering file {globalIndex + 1}/{batch.Items.Count}", setupWarnings);
                             var itemTemp = Path.Combine(temp, index.ToString("D4"));
                             var sourcePath = item.SourcePath;
                             renderTasks[index] = Task.Run(async () =>
@@ -291,12 +404,12 @@ public partial class MainWindow : Window
                         // chunks remain ordered on the printer queue.
                         var submission = _printer.Print(allPages, BatchJobName(batch, chunkIndex, chunkCount));
                         foreach (var item in chunk)
-                            UpdateQueueItem(item, "Printing", submission.Message);
+                            UpdateQueueItem(item, "Printing", submission.Message, setupWarnings);
 
                         if (submission.Job is null)
                         {
                             foreach (var item in chunk)
-                                UpdateQueueItem(item, "Sent", submission.Message);
+                                UpdateQueueItem(item, "Sent", submission.Message, setupWarnings);
                         }
                         else
                         {
@@ -306,7 +419,7 @@ public partial class MainWindow : Window
                     catch (Exception ex)
                     {
                         foreach (var item in chunk)
-                            UpdateQueueItem(item, "Failed", ex.Message);
+                            UpdateQueueItem(item, "Failed", ex.Message, setupWarnings);
                     }
                     finally
                     {
@@ -340,12 +453,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void UpdateQueueItem(QueueItem item, string status, string detail)
+    private void UpdateQueueItem(QueueItem item, string status, string detail, IReadOnlyList<string>? setupWarnings = null)
     {
         Dispatcher.Invoke(() =>
         {
             item.Status = status;
             item.Detail = detail;
+            if (setupWarnings is not null)
+                item.SetupWarning = string.Join(Environment.NewLine, setupWarnings);
             item.IsActive = status is "Queued" or "Printing";
             UpdateQueueSummary();
             QueueList.ScrollIntoView(item);
@@ -406,6 +521,9 @@ public partial class MainWindow : Window
             TitleText.Text = "Printing";
             StatusText.Text = $"{active} job{(active == 1 ? string.Empty : "s")} active in the printer queue.";
             DetailText.Text = "Waiting for Xerox printer status.";
+            var activeWarning = SessionQueue.LastOrDefault(item => item.IsActive && item.HasSetupWarning);
+            if (activeWarning is not null)
+                SetSetupWarningState(activeWarning, active: true);
             return;
         }
 
@@ -422,6 +540,23 @@ public partial class MainWindow : Window
         else if (complete > 0)
             SetSentState(sent, printed);
         else SetIdleState();
+
+        var latestCompleted = SessionQueue.LastOrDefault(item => item.Status is "Sent" or "Printed" or "Failed");
+        if (latestCompleted?.HasSetupWarning == true)
+            SetSetupWarningState(latestCompleted, active: false);
+    }
+
+    private void SetSetupWarningState(QueueItem item, bool active)
+    {
+        DropSurface.BorderBrush = SetupWarningBrush;
+        TitleText.Text = active ? "Printing" : "Check Setup";
+        StatusText.Text = active
+            ? "This printer queue differs from the benchmark PC."
+            : item.Status == "Failed"
+                ? "Job failed; this printer queue differs from the benchmark PC."
+                : "Job sent; this printer queue differs from the benchmark PC.";
+        DetailText.Text = item.SetupWarning.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
+            ?? "Open the queue to review the printer setup differences.";
     }
 
     private static bool TryGetFiles(DragEventArgs e, out IReadOnlyList<string> files)

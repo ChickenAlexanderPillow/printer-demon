@@ -93,5 +93,9 @@ $systemEvents = Get-WinEvent -FilterHashtable @{ LogName = 'System'; ProviderNam
     Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message
 Write-Report $systemEvents
 
-Compress-Archive -Path (Join-Path $outDir '*') -DestinationPath "$outDir.zip" -Force
-Write-Host "Diagnostics written to: $outDir.zip"
+$archivePath = "$outDir.zip"
+Compress-Archive -Path (Join-Path $outDir '*') -DestinationPath $archivePath -Force -ErrorAction Stop
+if (-not (Test-Path -LiteralPath $archivePath -PathType Leaf)) {
+    throw 'Diagnostics archive was not created.'
+}
+Write-Output $archivePath

@@ -11,11 +11,28 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Printing;
+using Microsoft.Win32;
 
 namespace PrinterDemon;
 
 public sealed class PrinterService
 {
+    // Captured from the user's known-good C600 queue. Keep these values as
+    // the cross-PC benchmark; a mismatch is reported only when a job is sent.
+    private const string BenchmarkQueueName = "Xerox VersaLink C600 (8a:c6:4a)";
+    private const string BenchmarkDriverName = "Xerox VersaLink C600 V4 PS";
+    private const string BenchmarkDriverVersion = "7.95.0.0";
+    private const string BenchmarkPortName = "X_XC-8AC64A-192.168.1.184";
+    private const string BenchmarkPrinterAddress = "192.168.1.184";
+    private const int BenchmarkPortNumber = 9100;
+    private const int BenchmarkPortProtocol = 1; // Standard TCP/IP RAW
+    private const string BenchmarkPaperSize = "ISOA4";
+    private const string BenchmarkInputBin = "tray-1";
+    private const string BenchmarkDuplex = "TwoSidedLongEdge";
+    private const string BenchmarkColor = "Color";
+    private const string BenchmarkResolution = "Res_600x600";
+    private const bool BenchmarkPageScalingSupported = false;
+
     private const double A4Width = 793.7008;
     private const double A4Height = 1122.5196;
     private const double PageMargin = 12;
@@ -35,8 +52,8 @@ public sealed class PrinterService
         var matches = queues
             .Where(queue => queue.FullName.Contains("VersaLink C600", StringComparison.OrdinalIgnoreCase))
             .Where(queue => !queue.IsOffline)
-            // Use only the supported driver: it exposes the XPS print ticket
-            // required to override per-PC scaling and other queue defaults.
+            // Use only the supported driver for the XPS ticket and its
+            // validated per-job media, tray, color, duplex, and scaling fields.
             .Where(queue => queue.QueueDriver.Name.Contains("Xerox VersaLink C600 V4 PS", StringComparison.OrdinalIgnoreCase))
             .ToArray();
         return matches.FirstOrDefault()
@@ -51,6 +68,71 @@ public sealed class PrinterService
         if (!queue.FullName.Contains("Xerox VersaLink C600", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("The selected queue is not the Xerox VersaLink C600.");
 
+    }
+
+    public IReadOnlyList<string> CheckQueueConfiguration()
+    {
+        using var server = new LocalPrintServer();
+        var queue = ResolveQueue(server, _settings.PrinterName);
+        var warnings = new List<string>();
+
+        Compare(warnings, "Queue", queue.FullName, BenchmarkQueueName);
+        Compare(warnings, "Driver", queue.QueueDriver.Name, BenchmarkDriverName);
+        var driverVersion = ReadDriverVersion(queue.QueueDriver.Name);
+        Compare(warnings, "Driver package version", driverVersion ?? "unavailable", BenchmarkDriverVersion);
+        Compare(warnings, "Port", queue.QueuePort.Name, BenchmarkPortName);
+
+        var port = ReadTcpPort(queue.QueuePort.Name);
+        Compare(warnings, "Printer address", port.Host ?? "unavailable", BenchmarkPrinterAddress);
+        Compare(warnings, "Port number", port.PortNumber?.ToString() ?? "unavailable", BenchmarkPortNumber.ToString());
+        Compare(warnings, "Port protocol", port.Protocol?.ToString() ?? "unavailable", BenchmarkPortProtocol.ToString());
+
+        var ticket = queue.DefaultPrintTicket;
+        Compare(warnings, "Default paper", ticket.PageMediaSize?.PageMediaSizeName?.ToString() ?? "unset", BenchmarkPaperSize);
+        Compare(warnings, "Default input tray", ReadTicketFeatureOption(ticket, "PageInputBin") ?? "unset", BenchmarkInputBin);
+        Compare(warnings, "Default job input tray", ReadTicketFeatureOption(ticket, "JobInputBin") ?? "unset", "unset");
+        Compare(warnings, "Default duplex", ticket.Duplexing?.ToString() ?? "unset", BenchmarkDuplex);
+        Compare(warnings, "Default color", ticket.OutputColor?.ToString() ?? "unset", BenchmarkColor);
+        Compare(warnings, "Default resolution", ReadTicketFeatureOption(ticket, "PageResolution") ?? "unset", BenchmarkResolution);
+        Compare(warnings, "Default scaling", ReadTicketFeatureOption(ticket, "PageScaling") ?? "unset", "unset");
+
+        var pageScalingSupported = queue.GetPrintCapabilities().PageScalingFactorRange is not null;
+        Compare(warnings, "Page scaling support", pageScalingSupported.ToString(), BenchmarkPageScalingSupported.ToString());
+        return warnings;
+    }
+
+    private static void Compare(ICollection<string> warnings, string setting, string actual, string expected)
+    {
+        if (!string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase))
+            warnings.Add($"{setting}: {actual} (benchmark: {expected})");
+    }
+
+    private static string? ReadTicketFeatureOption(PrintTicket ticket, string featureName)
+    {
+        var xmlText = ReadXml(ticket);
+        if (string.IsNullOrWhiteSpace(xmlText)) return null;
+        var feature = FindFeature(XDocument.Parse(xmlText), featureName);
+        return feature?.Elements().FirstOrDefault(element => element.Name.LocalName == "Option")?
+            .Attribute("name")?.Value.Split(':').Last();
+    }
+
+    private static string? ReadDriverVersion(string driverName)
+    {
+        const string root = @"SYSTEM\CurrentControlSet\Control\Print\Environments\Windows x64\Drivers\Version-4";
+        using var driverKey = Registry.LocalMachine.OpenSubKey($"{root}\\{driverName}");
+        return driverKey?.GetValue("DriverVersion")?.ToString();
+    }
+
+    private static (string? Host, int? PortNumber, int? Protocol) ReadTcpPort(string portName)
+    {
+        const string root = @"SYSTEM\CurrentControlSet\Control\Print\Monitors\Standard TCP/IP Port\Ports";
+        using var portKey = Registry.LocalMachine.OpenSubKey($"{root}\\{portName}");
+        if (portKey is null) return (null, null, null);
+
+        return (
+            portKey.GetValue("HostName")?.ToString() ?? portKey.GetValue("IPAddress")?.ToString(),
+            int.TryParse(portKey.GetValue("PortNumber")?.ToString(), out var number) ? number : null,
+            int.TryParse(portKey.GetValue("Protocol")?.ToString(), out var protocol) ? protocol : null);
     }
 
     public PrintSubmissionResult Print(IReadOnlyList<RenderedPage> pages, string jobName)

@@ -8,6 +8,7 @@ public sealed class QueueItem : INotifyPropertyChanged
 {
     private string _status = "Queued";
     private string _detail = string.Empty;
+    private string _setupWarning = string.Empty;
     private bool _isActive;
 
     public QueueItem(string path)
@@ -37,6 +38,20 @@ public sealed class QueueItem : INotifyPropertyChanged
         get => _detail;
         set { if (_detail == value) return; _detail = value; OnPropertyChanged(); }
     }
+
+    public string SetupWarning
+    {
+        get => _setupWarning;
+        set
+        {
+            if (_setupWarning == value) return;
+            _setupWarning = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasSetupWarning));
+        }
+    }
+
+    public bool HasSetupWarning => !string.IsNullOrWhiteSpace(SetupWarning);
 
     public bool IsActive
     {
